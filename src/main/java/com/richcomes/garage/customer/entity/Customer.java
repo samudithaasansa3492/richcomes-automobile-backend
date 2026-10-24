@@ -27,7 +27,7 @@ public class Customer {
             regexp = "^(?:\\d{9}[VvXx]|\\d{12})$",
             message = "Invalid Sri Lankan NIC format"
     )
-    @Column(unique = true, length = 12)
+    @Column(unique = true)
     private String nic;
 
     @Column(nullable = false, length = 255)
