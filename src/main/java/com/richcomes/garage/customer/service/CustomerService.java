@@ -1,3 +1,4 @@
+
 package com.richcomes.garage.customer.service;
 
 import com.richcomes.garage.customer.dto.CustomerCreateRequest;
@@ -7,6 +8,7 @@ import com.richcomes.garage.customer.entity.Customer;
 import com.richcomes.garage.customer.enums.CustomerStatus;
 import com.richcomes.garage.customer.enums.CustomerType;
 import com.richcomes.garage.customer.repository.CustomerRepository;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,7 +40,6 @@ public class CustomerService {
         customer.setVatNumber(normalizeOptional(request.getVatNumber()));
         customer.setCreditLimit(request.getCreditLimit());
         customer.setStatus(CustomerStatus.ACTIVE);
-
 
         if (request.getCustomerType() == CustomerType.PERSONAL) {
 
@@ -74,7 +75,6 @@ public class CustomerService {
     }
 
 
-
     @Transactional(readOnly = true)
     public List<CustomerResponse> getAllCustomers() {
 
@@ -83,7 +83,6 @@ public class CustomerService {
                 .map(this::mapToResponse)
                 .toList();
     }
-
 
 
     @Transactional(readOnly = true)
@@ -95,7 +94,13 @@ public class CustomerService {
     }
 
 
+    @Transactional(readOnly = true)
+    public Customer getCustomerEntityById(Long id) {
 
+        return findCustomerById(id);
+    }
+
+    // GET CUSTOMER BY NIC
     @Transactional(readOnly = true)
     public CustomerResponse getCustomerByNic(String nic) {
 
@@ -122,7 +127,6 @@ public class CustomerService {
     }
 
 
-
     @Transactional(readOnly = true)
     public List<CustomerResponse> searchCustomersByName(String name) {
 
@@ -139,7 +143,6 @@ public class CustomerService {
                 .map(this::mapToResponse)
                 .toList();
     }
-
 
     public CustomerResponse updateCustomer(
             Long id,
@@ -224,7 +227,6 @@ public class CustomerService {
 
         return mapToResponse(updatedCustomer);
     }
-
 
     public CustomerResponse suspendCustomer(Long id) {
 
