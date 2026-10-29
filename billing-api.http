@@ -1,0 +1,20 @@
+### Calculate invoice subtotal
+POST http://localhost:8080/api/v1/billing/calculate
+Content-Type: application/json
+
+{
+  "items": [
+    {
+      "itemType": "LABOUR",
+      "description": "Oil-change labour",
+      "quantity": 1,
+      "unitPrice": 1500.00
+    },
+    {
+      "itemType": "PART",
+      "description": "Engine oil",
+      "quantity": 2.5,
+      "unitPrice": 2000.00
+    }
+  ]
+}
