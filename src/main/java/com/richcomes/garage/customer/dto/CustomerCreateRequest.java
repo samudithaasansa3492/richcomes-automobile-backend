@@ -1,6 +1,9 @@
+
 package com.richcomes.garage.customer.dto;
 
 import com.richcomes.garage.customer.enums.CustomerType;
+
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -15,7 +18,7 @@ public class CustomerCreateRequest {
     @NotNull(message = "Customer type is required")
     private CustomerType customerType;
 
-    @NotBlank(message = "Name is required")
+    @NotBlank(message = "Customer name is required")
     @Size(max = 150, message = "Name cannot exceed 150 characters")
     private String name;
 
@@ -30,24 +33,50 @@ public class CustomerCreateRequest {
     private String address;
 
     @NotBlank(message = "Mobile number is required")
-    @Size(max = 10, message = "Mobile number cannot exceed 10 characters")
+    @Size(
+            min = 10,
+            max = 10,
+            message = "Mobile number must contain exactly 10 digits"
+    )
+    @Pattern(
+            regexp = "^07[0-9]{8}$",
+            message = "Enter a valid Sri Lankan mobile number (07XXXXXXXX)"
+    )
     private String mobile;
 
-    @Size(max = 10, message = "Office number cannot exceed 10 characters")
+    @Size(
+            max = 10,
+            message = "Office number cannot exceed 10 characters"
+    )
+    @Pattern(
+            regexp = "^(?:$|07[0-9]{8}|0(?:11|21|23|24|25|26|27|31|32|33|34|35|36|37|38|41|45|47|51|52|54|55|57|63|65|66|67|81|91)[0-9]{7})$",
+            message = "Enter a valid 10-digit Sri Lankan mobile or landline number"
+    )
     private String officeNumber;
 
     @Email(message = "Invalid email format")
-    @Size(max = 120, message = "Email cannot exceed 120 characters")
+    @Size(
+            max = 120,
+            message = "Email cannot exceed 120 characters"
+    )
     private String email;
 
     @NotBlank(message = "City is required")
     @Size(max = 100, message = "City cannot exceed 100 characters")
     private String city;
 
-    @Size(max = 50, message = "VAT number cannot exceed 50 characters")
+    @Size(
+            max = 50,
+            message = "VAT number cannot exceed 50 characters"
+    )
     private String vatNumber;
 
     @PositiveOrZero(message = "Credit limit cannot be negative")
+    @Digits(
+            integer = 10,
+            fraction = 2,
+            message = "Credit limit must have at most 10 integer digits and 2 decimal places"
+    )
     private BigDecimal creditLimit;
 
     public CustomerCreateRequest() {

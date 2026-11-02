@@ -19,7 +19,7 @@ public class VehicleResponse {
     private String chassisNumber;
     private String tagNumber;
     private LocalDate deliveryDate;
-    private Integer currentMileage;
+    private Double currentMileage;
     private VehicleStatus status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
@@ -115,11 +115,11 @@ public class VehicleResponse {
         this.deliveryDate = deliveryDate;
     }
 
-    public Integer getCurrentMileage() {
+    public Double getCurrentMileage() {
         return currentMileage;
     }
 
-    public void setCurrentMileage(Integer currentMileage) {
+    public void setCurrentMileage(Double currentMileage) {
         this.currentMileage = currentMileage;
     }
 

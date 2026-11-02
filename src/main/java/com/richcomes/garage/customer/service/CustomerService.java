@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @Transactional
@@ -27,6 +28,13 @@ public class CustomerService {
     }
 
     public CustomerResponse createCustomer(CustomerCreateRequest request) {
+
+        if (request == null || request.getCustomerType() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Customer type is required"
+            );
+        }
 
         Customer customer = new Customer();
 
@@ -50,8 +58,9 @@ public class CustomerService {
                 );
             }
 
-            String normalizedNic =
-                    request.getNic().trim().toUpperCase();
+            String normalizedNic = request.getNic()
+                    .trim()
+                    .toUpperCase(Locale.ROOT);
 
             if (customerRepository.existsByNic(normalizedNic)) {
                 throw new ResponseStatusException(
@@ -61,19 +70,16 @@ public class CustomerService {
             }
 
             customer.setNic(normalizedNic);
-        }
 
-        // COMPANY CUSTOMER
-        else if (request.getCustomerType() == CustomerType.COMPANY) {
+        } else if (request.getCustomerType() == CustomerType.COMPANY) {
+
             customer.setNic(null);
         }
 
-        Customer savedCustomer =
-                customerRepository.save(customer);
+        Customer savedCustomer = customerRepository.save(customer);
 
         return mapToResponse(savedCustomer);
     }
-
 
     @Transactional(readOnly = true)
     public List<CustomerResponse> getAllCustomers() {
@@ -84,7 +90,6 @@ public class CustomerService {
                 .toList();
     }
 
-
     @Transactional(readOnly = true)
     public CustomerResponse getCustomerById(Long id) {
 
@@ -93,14 +98,12 @@ public class CustomerService {
         return mapToResponse(customer);
     }
 
-
     @Transactional(readOnly = true)
     public Customer getCustomerEntityById(Long id) {
 
         return findCustomerById(id);
     }
 
-    // GET CUSTOMER BY NIC
     @Transactional(readOnly = true)
     public CustomerResponse getCustomerByNic(String nic) {
 
@@ -111,8 +114,9 @@ public class CustomerService {
             );
         }
 
-        String normalizedNic =
-                nic.trim().toUpperCase();
+        String normalizedNic = nic
+                .trim()
+                .toUpperCase(Locale.ROOT);
 
         Customer customer = customerRepository
                 .findByNic(normalizedNic)
@@ -125,7 +129,6 @@ public class CustomerService {
 
         return mapToResponse(customer);
     }
-
 
     @Transactional(readOnly = true)
     public List<CustomerResponse> searchCustomersByName(String name) {
@@ -147,6 +150,13 @@ public class CustomerService {
     public CustomerResponse updateCustomer(
             Long id,
             CustomerUpdateRequest request) {
+
+        if (request == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Customer update data is required"
+            );
+        }
 
         Customer customer = findCustomerById(id);
 
@@ -217,13 +227,10 @@ public class CustomerService {
         }
 
         if (request.getCreditLimit() != null) {
-            customer.setCreditLimit(
-                    request.getCreditLimit()
-            );
+            customer.setCreditLimit(request.getCreditLimit());
         }
 
-        Customer updatedCustomer =
-                customerRepository.save(customer);
+        Customer updatedCustomer = customerRepository.save(customer);
 
         return mapToResponse(updatedCustomer);
     }
@@ -234,12 +241,10 @@ public class CustomerService {
 
         customer.setStatus(CustomerStatus.SUSPENDED);
 
-        Customer updatedCustomer =
-                customerRepository.save(customer);
+        Customer updatedCustomer = customerRepository.save(customer);
 
         return mapToResponse(updatedCustomer);
     }
-
 
     public CustomerResponse activateCustomer(Long id) {
 
@@ -247,12 +252,10 @@ public class CustomerService {
 
         customer.setStatus(CustomerStatus.ACTIVE);
 
-        Customer updatedCustomer =
-                customerRepository.save(customer);
+        Customer updatedCustomer = customerRepository.save(customer);
 
         return mapToResponse(updatedCustomer);
     }
-
 
     private Customer findCustomerById(Long id) {
 
@@ -265,7 +268,6 @@ public class CustomerService {
                 );
     }
 
-
     private String normalizeOptional(String value) {
 
         if (value == null || value.isBlank()) {
@@ -275,11 +277,9 @@ public class CustomerService {
         return value.trim();
     }
 
-
     private CustomerResponse mapToResponse(Customer customer) {
 
-        CustomerResponse response =
-                new CustomerResponse();
+        CustomerResponse response = new CustomerResponse();
 
         response.setId(customer.getId());
         response.setCustomerType(customer.getCustomerType());

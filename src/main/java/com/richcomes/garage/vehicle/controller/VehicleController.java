@@ -24,7 +24,6 @@ public class VehicleController {
         this.vehicleService = vehicleService;
     }
 
-    // CREATE VEHICLE
     @PostMapping
     public ResponseEntity<VehicleResponse> createVehicle(
             @Valid @RequestBody VehicleCreateRequest request) {
@@ -37,7 +36,6 @@ public class VehicleController {
                 .body(response);
     }
 
-    // GET ALL VEHICLES
     @GetMapping
     public ResponseEntity<List<VehicleResponse>> getAllVehicles() {
 
@@ -46,7 +44,6 @@ public class VehicleController {
         );
     }
 
-    // GET VEHICLE BY ID
     @GetMapping("/{id}")
     public ResponseEntity<VehicleResponse> getVehicleById(
             @PathVariable Long id) {
@@ -56,7 +53,6 @@ public class VehicleController {
         );
     }
 
-    // SEARCH VEHICLE BY REGISTRATION NUMBER
     @GetMapping("/number/{vehicleNumber}")
     public ResponseEntity<VehicleResponse> getVehicleByNumber(
             @PathVariable String vehicleNumber) {
@@ -66,7 +62,6 @@ public class VehicleController {
         );
     }
 
-    // GET VEHICLES BY CUSTOMER ID
     @GetMapping("/customer/{customerId}")
     public ResponseEntity<List<VehicleResponse>> getVehiclesByCustomer(
             @PathVariable Long customerId) {
@@ -76,7 +71,6 @@ public class VehicleController {
         );
     }
 
-    // UPDATE VEHICLE
     @PutMapping("/{id}")
     public ResponseEntity<VehicleResponse> updateVehicle(
             @PathVariable Long id,
@@ -87,7 +81,6 @@ public class VehicleController {
         );
     }
 
-    // DEACTIVATE VEHICLE
     @PatchMapping("/{id}/deactivate")
     public ResponseEntity<VehicleResponse> deactivateVehicle(
             @PathVariable Long id) {
@@ -97,7 +90,6 @@ public class VehicleController {
         );
     }
 
-    // ACTIVATE VEHICLE
     @PatchMapping("/{id}/activate")
     public ResponseEntity<VehicleResponse> activateVehicle(
             @PathVariable Long id) {

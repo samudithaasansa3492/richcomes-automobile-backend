@@ -37,7 +37,7 @@ public class VehicleUpdateRequest {
     private LocalDate deliveryDate;
 
     @PositiveOrZero(message = "Current mileage cannot be negative")
-    private Integer currentMileage;
+    private Double currentMileage;
 
     public VehicleUpdateRequest() {
     }
@@ -106,11 +106,11 @@ public class VehicleUpdateRequest {
         this.deliveryDate = deliveryDate;
     }
 
-    public Integer getCurrentMileage() {
+    public Double getCurrentMileage() {
         return currentMileage;
     }
 
-    public void setCurrentMileage(Integer currentMileage) {
+    public void setCurrentMileage(Double currentMileage) {
         this.currentMileage = currentMileage;
     }
 }
