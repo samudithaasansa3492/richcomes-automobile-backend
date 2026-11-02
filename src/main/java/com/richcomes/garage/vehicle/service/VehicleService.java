@@ -17,10 +17,16 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 @Service
 @Transactional
 public class VehicleService {
+
+    private static final Pattern VEHICLE_NUMBER_PATTERN =
+            Pattern.compile(
+                    "^(?:[A-Z]{2,3}|[0-9]{2,3})-[0-9]{4}$"
+            );
 
     private final VehicleRepository vehicleRepository;
     private final CustomerService customerService;
@@ -33,7 +39,6 @@ public class VehicleService {
         this.customerService = customerService;
     }
 
-    // CREATE VEHICLE
     public VehicleResponse createVehicle(VehicleCreateRequest request) {
 
         if (request == null
@@ -65,18 +70,18 @@ public class VehicleService {
         }
 
         if (request.getCurrentMileage() != null
-                && request.getCurrentMileage() < 0) {
+                && (!Double.isFinite(request.getCurrentMileage())
+                || request.getCurrentMileage() < 0)) {
 
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Current mileage cannot be negative"
+                    "Current mileage must be a finite number greater than or equal to zero"
             );
         }
 
         String vehicleNumber =
                 normalizeVehicleNumber(request.getVehicleNumber());
 
-        // CHECK DUPLICATE VEHICLE NUMBER
         if (vehicleRepository.existsByVehicleNumber(vehicleNumber)) {
 
             throw new ResponseStatusException(
@@ -85,11 +90,9 @@ public class VehicleService {
             );
         }
 
-        // FIND EXISTING CUSTOMER
         Customer customer = customerService
                 .getCustomerEntityById(request.getCustomerId());
 
-        // CREATE NEW VEHICLE
         Vehicle vehicle = new Vehicle();
 
         vehicle.setVehicleNumber(vehicleNumber);
@@ -112,7 +115,6 @@ public class VehicleService {
         return mapToResponse(savedVehicle);
     }
 
-    // GET ALL VEHICLES
     @Transactional(readOnly = true)
     public List<VehicleResponse> getAllVehicles() {
 
@@ -122,7 +124,6 @@ public class VehicleService {
                 .toList();
     }
 
-    // GET VEHICLE BY ID
     @Transactional(readOnly = true)
     public VehicleResponse getVehicleById(Long id) {
 
@@ -131,7 +132,6 @@ public class VehicleService {
         return mapToResponse(vehicle);
     }
 
-    // SEARCH VEHICLE BY REGISTRATION NUMBER
     @Transactional(readOnly = true)
     public VehicleResponse getVehicleByNumber(String vehicleNumber) {
 
@@ -157,7 +157,6 @@ public class VehicleService {
         return mapToResponse(vehicle);
     }
 
-    // GET VEHICLES BY CUSTOMER ID
     @Transactional(readOnly = true)
     public List<VehicleResponse> getVehiclesByCustomer(Long customerId) {
 
@@ -168,7 +167,6 @@ public class VehicleService {
             );
         }
 
-        // VALIDATE CUSTOMER EXISTS
         customerService.getCustomerEntityById(customerId);
 
         return vehicleRepository.findByCustomer_Id(customerId)
@@ -177,7 +175,6 @@ public class VehicleService {
                 .toList();
     }
 
-    // UPDATE VEHICLE
     public VehicleResponse updateVehicle(
             Long id,
             VehicleUpdateRequest request) {
@@ -249,10 +246,12 @@ public class VehicleService {
 
         if (request.getCurrentMileage() != null) {
 
-            if (request.getCurrentMileage() < 0) {
+            if (!Double.isFinite(request.getCurrentMileage())
+                    || request.getCurrentMileage() < 0) {
+
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
-                        "Current mileage cannot be negative"
+                        "Current mileage must be a finite number greater than or equal to zero"
                 );
             }
 
@@ -266,7 +265,6 @@ public class VehicleService {
         return mapToResponse(updatedVehicle);
     }
 
-    // DEACTIVATE VEHICLE
     public VehicleResponse deactivateVehicle(Long id) {
 
         Vehicle vehicle = findVehicleById(id);
@@ -278,7 +276,6 @@ public class VehicleService {
         return mapToResponse(updatedVehicle);
     }
 
-    // ACTIVATE VEHICLE
     public VehicleResponse activateVehicle(Long id) {
 
         Vehicle vehicle = findVehicleById(id);
@@ -290,7 +287,6 @@ public class VehicleService {
         return mapToResponse(updatedVehicle);
     }
 
-    // FIND VEHICLE ENTITY BY ID
     private Vehicle findVehicleById(Long id) {
 
         return vehicleRepository.findById(id)
@@ -302,13 +298,29 @@ public class VehicleService {
                 );
     }
 
-    // NORMALIZE VEHICLE NUMBER
     private String normalizeVehicleNumber(String value) {
 
-        return value.trim().toUpperCase(Locale.ROOT);
+        if (value == null || value.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Vehicle number is required"
+            );
+        }
+
+        String normalizedNumber = value.trim()
+                .toUpperCase(Locale.ROOT)
+                .replaceAll("\\s*-\\s*", "-");
+
+        if (!VEHICLE_NUMBER_PATTERN.matcher(normalizedNumber).matches()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invalid vehicle registration number"
+            );
+        }
+
+        return normalizedNumber;
     }
 
-    // NORMALIZE OPTIONAL FIELDS
     private String normalizeOptional(String value) {
 
         if (value == null || value.isBlank()) {
@@ -318,7 +330,6 @@ public class VehicleService {
         return value.trim();
     }
 
-    // MAP ENTITY TO RESPONSE DTO
     private VehicleResponse mapToResponse(Vehicle vehicle) {
 
         VehicleResponse response = new VehicleResponse();

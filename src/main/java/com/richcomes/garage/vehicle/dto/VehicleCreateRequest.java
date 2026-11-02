@@ -3,6 +3,7 @@ package com.richcomes.garage.vehicle.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
@@ -12,7 +13,10 @@ import java.time.LocalDate;
 public class VehicleCreateRequest {
 
     @NotBlank(message = "Vehicle number is required")
-    @Size(max = 30, message = "Vehicle number cannot exceed 30 characters")
+    @Pattern(
+            regexp = "(?i)^\\s*(?:[A-Z]{2,3}|[0-9]{2,3})\\s*-\\s*[0-9]{4}\\s*$",
+            message = "Vehicle number must have 2 or 3 letters or digits, a hyphen, and 4 digits"
+    )
     private String vehicleNumber;
 
     @NotNull(message = "Customer ID is required")
@@ -44,7 +48,7 @@ public class VehicleCreateRequest {
     private LocalDate deliveryDate;
 
     @PositiveOrZero(message = "Current mileage cannot be negative")
-    private Integer currentMileage;
+    private Double currentMileage;
 
     public VehicleCreateRequest() {
     }
@@ -129,11 +133,11 @@ public class VehicleCreateRequest {
         this.deliveryDate = deliveryDate;
     }
 
-    public Integer getCurrentMileage() {
+    public Double getCurrentMileage() {
         return currentMileage;
     }
 
-    public void setCurrentMileage(Integer currentMileage) {
+    public void setCurrentMileage(Double currentMileage) {
         this.currentMileage = currentMileage;
     }
 }

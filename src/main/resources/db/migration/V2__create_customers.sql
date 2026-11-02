@@ -1,3 +1,4 @@
+
 CREATE SCHEMA IF NOT EXISTS garage;
 
 CREATE TABLE garage.customers (
@@ -11,9 +12,9 @@ CREATE TABLE garage.customers (
 
     address VARCHAR(255) NOT NULL,
 
-    mobile VARCHAR(20) NOT NULL,
+    mobile VARCHAR(10) NOT NULL,
 
-    office_number VARCHAR(20),
+    office_number VARCHAR(10),
 
     email VARCHAR(120),
 
@@ -37,11 +38,33 @@ CREATE TABLE garage.customers (
 
     CONSTRAINT chk_customer_nic_rule
         CHECK (
-            (customer_type = 'PERSONAL' AND nic IS NOT NULL)
+            (
+                customer_type = 'PERSONAL'
+                AND nic IS NOT NULL
+                AND nic ~ '^([0-9]{9}[VvXx]|[0-9]{12})$'
+            )
             OR
-            (customer_type = 'COMPANY' AND nic IS NULL)
+            (
+                customer_type = 'COMPANY'
+                AND nic IS NULL
+            )
+        ),
+
+    CONSTRAINT chk_customer_mobile_format
+        CHECK (
+            mobile ~ '^07[0-9]{8}$'
+        ),
+
+    CONSTRAINT chk_customer_office_format
+        CHECK (
+            office_number IS NULL
+            OR office_number ~
+            '^(07[0-9]{8}|0(11|21|23|24|25|26|27|31|32|33|34|35|36|37|38|41|45|47|51|52|54|55|57|63|65|66|67|81|91)[0-9]{7})$'
         ),
 
     CONSTRAINT chk_credit_limit
-        CHECK (credit_limit IS NULL OR credit_limit >= 0)
+        CHECK (
+            credit_limit IS NULL
+            OR credit_limit >= 0
+        )
 );
