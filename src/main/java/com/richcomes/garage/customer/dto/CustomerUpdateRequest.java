@@ -1,6 +1,9 @@
+
 package com.richcomes.garage.customer.dto;
 
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Email;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
 
@@ -14,10 +17,25 @@ public class CustomerUpdateRequest {
     @Size(max = 255, message = "Address cannot exceed 255 characters")
     private String address;
 
-    @Size(max = 10, message = "Mobile number cannot exceed 10 characters")
+    @Size(
+            min = 10,
+            max = 10,
+            message = "Mobile number must contain exactly 10 digits"
+    )
+    @Pattern(
+            regexp = "^07[0-9]{8}$",
+            message = "Enter a valid Sri Lankan mobile number (07XXXXXXXX)"
+    )
     private String mobile;
 
-    @Size(max = 10, message = "Office number cannot exceed 10 characters")
+    @Size(
+            max = 10,
+            message = "Office number cannot exceed 10 characters"
+    )
+    @Pattern(
+            regexp = "^(?:$|07[0-9]{8}|0(?:11|21|23|24|25|26|27|31|32|33|34|35|36|37|38|41|45|47|51|52|54|55|57|63|65|66|67|81|91)[0-9]{7})$",
+            message = "Enter a valid 10-digit Sri Lankan mobile or landline number"
+    )
     private String officeNumber;
 
     @Email(message = "Invalid email format")
@@ -31,6 +49,11 @@ public class CustomerUpdateRequest {
     private String vatNumber;
 
     @PositiveOrZero(message = "Credit limit cannot be negative")
+    @Digits(
+            integer = 10,
+            fraction = 2,
+            message = "Credit limit must have at most 10 integer digits and 2 decimal places"
+    )
     private BigDecimal creditLimit;
 
     public CustomerUpdateRequest() {

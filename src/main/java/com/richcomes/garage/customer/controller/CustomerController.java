@@ -23,7 +23,6 @@ public class CustomerController {
         this.customerService = customerService;
     }
 
-
     @PostMapping
     public ResponseEntity<CustomerResponse> createCustomer(
             @Valid @RequestBody CustomerCreateRequest request) {
@@ -36,7 +35,6 @@ public class CustomerController {
                 .body(response);
     }
 
-
     @GetMapping
     public ResponseEntity<List<CustomerResponse>> getAllCustomers() {
 
@@ -44,7 +42,6 @@ public class CustomerController {
                 customerService.getAllCustomers()
         );
     }
-
 
     @GetMapping("/{id}")
     public ResponseEntity<CustomerResponse> getCustomerById(
@@ -55,7 +52,6 @@ public class CustomerController {
         );
     }
 
-
     @GetMapping("/nic/{nic}")
     public ResponseEntity<CustomerResponse> getCustomerByNic(
             @PathVariable String nic) {
@@ -65,7 +61,6 @@ public class CustomerController {
         );
     }
 
-
     @GetMapping("/search")
     public ResponseEntity<List<CustomerResponse>> searchByName(
             @RequestParam String name) {
@@ -74,7 +69,6 @@ public class CustomerController {
                 customerService.searchCustomersByName(name)
         );
     }
-
 
     @PutMapping("/{id}")
     public ResponseEntity<CustomerResponse> updateCustomer(
@@ -86,7 +80,6 @@ public class CustomerController {
         );
     }
 
-
     @PatchMapping("/{id}/suspend")
     public ResponseEntity<CustomerResponse> suspendCustomer(
             @PathVariable Long id) {
@@ -95,7 +88,6 @@ public class CustomerController {
                 customerService.suspendCustomer(id)
         );
     }
-
 
     @PatchMapping("/{id}/activate")
     public ResponseEntity<CustomerResponse> activateCustomer(
