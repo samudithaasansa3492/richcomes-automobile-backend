@@ -1,8 +1,12 @@
+
 package com.richcomes.garage.vehicle.entity;
 
 import com.richcomes.garage.customer.entity.Customer;
 import com.richcomes.garage.vehicle.enums.VehicleStatus;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.PositiveOrZero;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -23,13 +27,19 @@ public class Vehicle {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "vehicle_number", nullable = false, length = 30)
+    @NotBlank(message = "Vehicle number is required")
+    @Pattern(
+            regexp = "^(?:[A-Z]{2,3}|[0-9]{2,3})-[0-9]{4}$",
+            message = "Invalid vehicle registration number"
+    )
+    @Column(name = "vehicle_number", nullable = false, length = 8)
     private String vehicleNumber;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "customer_id", nullable = false)
     private Customer customer;
 
+    @NotBlank(message = "Vehicle type is required")
     @Column(name = "vehicle_type", nullable = false, length = 50)
     private String vehicleType;
 
@@ -54,8 +64,9 @@ public class Vehicle {
     @Column(name = "delivery_date")
     private LocalDate deliveryDate;
 
+    @PositiveOrZero(message = "Current mileage cannot be negative")
     @Column(name = "current_mileage")
-    private Integer currentMileage;
+    private Double currentMileage;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -170,11 +181,11 @@ public class Vehicle {
         this.deliveryDate = deliveryDate;
     }
 
-    public Integer getCurrentMileage() {
+    public Double getCurrentMileage() {
         return currentMileage;
     }
 
-    public void setCurrentMileage(Integer currentMileage) {
+    public void setCurrentMileage(Double currentMileage) {
         this.currentMileage = currentMileage;
     }
 
