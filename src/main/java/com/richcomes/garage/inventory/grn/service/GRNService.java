@@ -69,7 +69,12 @@ public class GRNService {
                         HttpStatus.NOT_FOUND,
                         "Supplier not found"
                 ));
-
+        if (!supplier.isActive()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Inactive supplier cannot be used for a GRN"
+            );
+        }
         GRN grn = new GRN();
         grn.setSupplier(supplier);
         if (request.getNotes() != null && request.getNotes().length() > 500) {
@@ -369,4 +374,3 @@ public class GRNService {
     }
 
 }
-

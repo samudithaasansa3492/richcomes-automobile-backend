@@ -110,7 +110,15 @@ public class StockCategoryService {
     }
 
     // FIND CATEGORY
+
     private StockCategory findCategory(Long id) {
+
+        if (id == null || id <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Valid category ID is required"
+            );
+        }
 
         return repository.findById(id)
                 .orElseThrow(() ->

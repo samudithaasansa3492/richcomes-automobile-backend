@@ -335,5 +335,36 @@ class GRNServiceTest {
         verify(grnRepository, never()).saveAndFlush(any(GRN.class));
     }
 
+    @Test
+    void createDraftWithInactiveSupplier_ShouldReject() {
+
+        GRNRequest request = new GRNRequest();
+        request.setSupplierId(1L);
+
+        GRNItemRequest itemRequest = new GRNItemRequest();
+        itemRequest.setStockItemId(1L);
+        itemRequest.setReceivedQuantity(5);
+        itemRequest.setUnitCost(new BigDecimal("1500.00"));
+
+        request.setItems(List.of(itemRequest));
+
+        Supplier inactiveSupplier = new Supplier();
+        inactiveSupplier.setActive(false);
+
+        when(supplierRepository.findById(1L))
+                .thenReturn(Optional.of(inactiveSupplier));
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> grnService.createDraft(request)
+        );
+
+        assertEquals(400, exception.getStatusCode().value());
+
+        verifyNoInteractions(stockItemRepository);
+        verify(grnRepository, never()).saveAndFlush(any(GRN.class));
+    }
+
+
 
 }

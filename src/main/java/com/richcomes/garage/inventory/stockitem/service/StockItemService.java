@@ -85,6 +85,13 @@ public class StockItemService {
     public List<StockItemResponse> getItemsByCategory(
             Long categoryId) {
 
+        if (categoryId == null || categoryId <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Valid stock category ID is required"
+            );
+        }
+
         return itemRepository.findByCategoryId(categoryId)
                 .stream()
                 .map(this::mapToResponse)
@@ -177,6 +184,14 @@ public class StockItemService {
     // FIND ITEM
     private StockItem findItem(Long id) {
 
+        // Validate ID before database lookup.
+        if (id == null || id <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Valid stock item ID is required"
+            );
+        }
+
         return itemRepository.findById(id)
                 .orElseThrow(() ->
                         new ResponseStatusException(
@@ -188,6 +203,14 @@ public class StockItemService {
 
     // FIND ACTIVE CATEGORY
     private StockCategory findActiveCategory(Long id) {
+
+        // Validate ID before database lookup.
+        if (id == null || id <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Valid stock category ID is required"
+            );
+        }
 
         StockCategory category = categoryRepository.findById(id)
                 .orElseThrow(() ->

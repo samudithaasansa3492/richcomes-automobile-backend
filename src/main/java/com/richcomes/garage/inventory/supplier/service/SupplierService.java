@@ -111,7 +111,16 @@ public class SupplierService {
     }
 
     // FIND SUPPLIER
+
     private Supplier findSupplier(Long id) {
+
+        if (id == null || id <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Valid supplier ID is required"
+            );
+        }
+
         return repository.findById(id)
                 .orElseThrow(() ->
                         new ResponseStatusException(
@@ -120,6 +129,7 @@ public class SupplierService {
                         )
                 );
     }
+
 
     // NORMALIZE OPTIONAL TIN
     private String normalizeTin(String tin) {
