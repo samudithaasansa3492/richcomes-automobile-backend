@@ -25,18 +25,59 @@ public class StockMovementService {
     public StockMovementService(
             StockItemRepository itemRepository,
             StockTransactionRepository transactionRepository) {
+
         this.itemRepository = itemRepository;
         this.transactionRepository = transactionRepository;
     }
 
-    // RECORD MANUAL STOCK MOVEMENT
+    // RECORD STOCK MOVEMENT
     // Do not expose publicly before JWT authorization.
     @Transactional
     public StockMovementResponse recordMovement(
             StockMovementRequest request) {
 
+        // Validate request before accessing database
+        if (request == null
+                || request.getStockItemId() == null
+                || request.getTransactionType() == null
+                || request.getQuantity() == null
+                || request.getQuantity() <= 0) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Valid stock item, transaction type and positive quantity are required"
+            );
+        }
+
+        if (request.getReason() != null
+                && request.getReason().length() > 500) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Reason cannot exceed 500 characters"
+            );
+        }
+
+        StockTransactionType type = request.getTransactionType();
+        int quantity = request.getQuantity();
+
+        // Require reason for damage, wastage and adjustments
+        if ((type == StockTransactionType.DAMAGE
+                || type == StockTransactionType.WASTAGE
+                || type == StockTransactionType.ADJUSTMENT_IN
+                || type == StockTransactionType.ADJUSTMENT_OUT)
+                && (request.getReason() == null
+                || request.getReason().isBlank())) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Reason is required for this transaction"
+            );
+        }
+
+        // Lock stock item to prevent concurrent quantity changes
         StockItem item = itemRepository
-                .findById(request.getStockItemId())
+                .findByIdForUpdate(request.getStockItemId())
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
                         "Stock item not found"
@@ -49,11 +90,16 @@ public class StockMovementService {
             );
         }
 
-        int quantity = request.getQuantity();
-        int before = item.getCurrentQuantity();
+        Integer currentQuantity = item.getCurrentQuantity();
 
-        StockTransactionType type = request.getTransactionType();
+        if (currentQuantity == null || currentQuantity < 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Invalid current stock quantity"
+            );
+        }
 
+        int before = currentQuantity;
         int after;
 
         try {
@@ -78,23 +124,13 @@ public class StockMovementService {
             );
         }
 
-        if ((type == StockTransactionType.DAMAGE ||
-                type == StockTransactionType.WASTAGE ||
-                type == StockTransactionType.ADJUSTMENT_IN ||
-                type == StockTransactionType.ADJUSTMENT_OUT)
-                && (request.getReason() == null ||
-                request.getReason().isBlank())) {
-
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Reason is required for this transaction"
-            );
-        }
-
+        // Update current stock quantity
         item.setCurrentQuantity(after);
         itemRepository.saveAndFlush(item);
 
+        // Record transaction history
         StockTransaction transaction = new StockTransaction();
+
         transaction.setStockItem(item);
         transaction.setTransactionType(type);
         transaction.setQuantity(quantity);
@@ -102,10 +138,11 @@ public class StockMovementService {
         transaction.setQuantityAfter(after);
         transaction.setReason(request.getReason());
 
-        // To be set by trusted backend integrations later:
+        // Set audit details after Auth module integration:
         // transaction.setPerformedBy(authenticatedUserId);
-        // transaction.setReferenceType("GRN" / "JOB_CARD");
-        // transaction.setReferenceId(referenceId);
+
+        // GRN / Job Card reference details should be set
+        // by trusted backend integration services.
 
         StockTransaction saved =
                 transactionRepository.saveAndFlush(transaction);
@@ -113,7 +150,7 @@ public class StockMovementService {
         return mapToResponse(saved);
     }
 
-    // GET ALL TRANSACTION HISTORY
+    // GET ALL STOCK TRANSACTION HISTORY
     @Transactional(readOnly = true)
     public List<StockMovementResponse> getAllTransactions() {
 
@@ -124,9 +161,16 @@ public class StockMovementService {
                 .toList();
     }
 
-    // GET TRANSACTIONS FOR ONE ITEM
+    // GET TRANSACTION HISTORY FOR ONE STOCK ITEM
     @Transactional(readOnly = true)
     public List<StockMovementResponse> getItemTransactions(Long itemId) {
+
+        if (itemId == null || itemId <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Valid stock item ID is required"
+            );
+        }
 
         if (!itemRepository.existsById(itemId)) {
             throw new ResponseStatusException(
@@ -142,7 +186,7 @@ public class StockMovementService {
                 .toList();
     }
 
-    // ENTITY -> RESPONSE DTO
+    // CONVERT ENTITY TO RESPONSE DTO
     private StockMovementResponse mapToResponse(
             StockTransaction transaction) {
 
@@ -174,6 +218,7 @@ public class StockMovementService {
         response.setReferenceId(
                 transaction.getReferenceId()
         );
+
         response.setReason(transaction.getReason());
         response.setPerformedBy(transaction.getPerformedBy());
         response.setCreatedAt(transaction.getCreatedAt());

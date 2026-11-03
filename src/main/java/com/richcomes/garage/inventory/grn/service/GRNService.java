@@ -183,8 +183,7 @@ public class GRNService {
         response.setCreatedAt(grn.getCreatedAt());
         response.setNotes(grn.getNotes());
 
-        // Set supplierName after checking actual Supplier
-        // entity getter name.
+        response.setSupplierName(grn.getSupplier().getSupplierName());
 
         List<GRNItemResponse> itemResponses =
                 grn.getItems()
