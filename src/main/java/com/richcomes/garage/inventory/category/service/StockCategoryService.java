@@ -18,7 +18,8 @@ public class StockCategoryService {
 
     private final StockCategoryRepository repository;
 
-    public StockCategoryService(StockCategoryRepository repository) {
+    public StockCategoryService(
+            StockCategoryRepository repository) {
         this.repository = repository;
     }
 
@@ -110,7 +111,6 @@ public class StockCategoryService {
     }
 
     // FIND CATEGORY
-
     private StockCategory findCategory(Long id) {
 
         if (id == null || id <= 0) {

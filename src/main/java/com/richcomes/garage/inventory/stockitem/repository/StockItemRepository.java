@@ -1,6 +1,7 @@
 
 package com.richcomes.garage.inventory.stockitem.repository;
-
+import com.richcomes.garage.inventory.stockitem.entity.StockItem;
+import java.util.Optional;
 import com.richcomes.garage.inventory.stockitem.entity.StockItem;
 import org.springframework.data.jpa.repository.JpaRepository;
 import com.richcomes.garage.inventory.stockitem.entity.StockItem;
@@ -18,7 +19,7 @@ public interface StockItemRepository
 
     // Find an item using item code
     Optional<StockItem> findByItemCode(String itemCode);
-
+    List<StockItem> findByItemNameContainingIgnoreCase(String itemName);
     // Find an item using barcode
     Optional<StockItem> findByBarcode(String barcode);
 

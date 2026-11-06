@@ -4,6 +4,7 @@ package com.richcomes.garage.inventory.stockmovement.repository;
 import com.richcomes.garage.inventory.stockmovement.entity.StockTransaction;
 import com.richcomes.garage.inventory.stockmovement.enums.StockTransactionType;
 
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -11,23 +12,34 @@ import java.util.List;
 public interface StockTransactionRepository
         extends JpaRepository<StockTransaction, Long> {
 
-    // Get transaction history of a stock item
+    // EXISTING: Transaction history for one stock item
     List<StockTransaction>
     findByStockItemIdOrderByCreatedAtDesc(Long stockItemId);
 
-    // Get all transactions ordered by newest first
+    // EXISTING: All transactions, newest first
     List<StockTransaction> findAllByOrderByCreatedAtDesc();
 
-    // Get transactions by type
+    // EXISTING: Transactions filtered by type
     List<StockTransaction>
     findByTransactionTypeOrderByCreatedAtDesc(
             StockTransactionType transactionType
     );
 
-    // Get transactions for an external reference
+    // EXISTING: Transactions linked to an external reference
     List<StockTransaction>
     findByReferenceTypeAndReferenceId(
             String referenceType,
             Long referenceId
+    );
+
+    // NEW: Latest transactions with database-level limit
+    List<StockTransaction>
+    findAllByOrderByCreatedAtDesc(Pageable pageable);
+
+    // NEW: Filter by type with database-level limit
+    List<StockTransaction>
+    findByTransactionTypeOrderByCreatedAtDesc(
+            StockTransactionType transactionType,
+            Pageable pageable
     );
 }

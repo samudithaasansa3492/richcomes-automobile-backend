@@ -37,6 +37,7 @@ public class SupplierService {
         }
 
         Supplier supplier = new Supplier();
+
         supplier.setSupplierName(name);
         supplier.setTinNumber(tin);
         supplier.setContactPerson(request.getContactPerson());
@@ -50,6 +51,7 @@ public class SupplierService {
     // GET ALL SUPPLIERS
     @Transactional(readOnly = true)
     public List<SupplierResponse> getAllSuppliers() {
+
         return repository.findAll()
                 .stream()
                 .map(this::mapToResponse)
@@ -59,13 +61,15 @@ public class SupplierService {
     // GET SUPPLIER BY ID
     @Transactional(readOnly = true)
     public SupplierResponse getSupplierById(Long id) {
+
         return mapToResponse(findSupplier(id));
     }
 
     // UPDATE SUPPLIER
     @Transactional
     public SupplierResponse updateSupplier(
-            Long id, SupplierRequest request) {
+            Long id,
+            SupplierRequest request) {
 
         Supplier supplier = findSupplier(id);
 
@@ -97,7 +101,9 @@ public class SupplierService {
     // DEACTIVATE SUPPLIER
     @Transactional
     public void deactivateSupplier(Long id) {
+
         Supplier supplier = findSupplier(id);
+
         supplier.setActive(false);
         repository.save(supplier);
     }
@@ -105,13 +111,14 @@ public class SupplierService {
     // ACTIVATE SUPPLIER
     @Transactional
     public void activateSupplier(Long id) {
+
         Supplier supplier = findSupplier(id);
+
         supplier.setActive(true);
         repository.save(supplier);
     }
 
     // FIND SUPPLIER
-
     private Supplier findSupplier(Long id) {
 
         if (id == null || id <= 0) {
@@ -130,17 +137,19 @@ public class SupplierService {
                 );
     }
 
-
     // NORMALIZE OPTIONAL TIN
     private String normalizeTin(String tin) {
+
         if (tin == null || tin.isBlank()) {
             return null;
         }
+
         return tin.trim();
     }
 
     // ENTITY -> RESPONSE DTO
     private SupplierResponse mapToResponse(Supplier supplier) {
+
         return new SupplierResponse(
                 supplier.getId(),
                 supplier.getSupplierName(),

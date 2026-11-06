@@ -98,6 +98,54 @@ public class StockItemService {
                 .toList();
     }
 
+    // GET STOCK ITEM BY ITEM CODE - READ ONLY
+    @Transactional(readOnly = true)
+    public StockItemResponse getItemByCode(String itemCode) {
+
+        if (itemCode == null || itemCode.isBlank()
+                || itemCode.length() > 100) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Valid stock item code is required"
+            );
+        }
+
+        String normalizedCode = itemCode.trim();
+
+        StockItem item = itemRepository
+                .findByItemCode(normalizedCode)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Stock item not found"
+                        )
+                );
+
+        return mapToResponse(item);
+    }
+
+    // SEARCH STOCK ITEMS BY NAME - READ ONLY
+    @Transactional(readOnly = true)
+    public List<StockItemResponse> searchItemsByName(String itemName) {
+
+        if (itemName == null || itemName.isBlank()
+                || itemName.trim().length() < 2
+                || itemName.length() > 100) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Item name must contain 2-100 characters"
+            );
+        }
+
+        return itemRepository
+                .findByItemNameContainingIgnoreCase(itemName.trim())
+                .stream()
+                .limit(20)
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+
     // GET LOW STOCK ITEMS
     @Transactional(readOnly = true)
     public List<StockItemResponse> getLowStockItems() {

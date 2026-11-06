@@ -3,12 +3,14 @@ package com.richcomes.garage.inventory.stockmovement.service;
 
 import com.richcomes.garage.inventory.stockitem.entity.StockItem;
 import com.richcomes.garage.inventory.stockitem.repository.StockItemRepository;
+
 import com.richcomes.garage.inventory.stockmovement.dto.request.StockMovementRequest;
 import com.richcomes.garage.inventory.stockmovement.dto.response.StockMovementResponse;
 import com.richcomes.garage.inventory.stockmovement.entity.StockTransaction;
 import com.richcomes.garage.inventory.stockmovement.enums.StockTransactionType;
 import com.richcomes.garage.inventory.stockmovement.repository.StockTransactionRepository;
 
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +20,8 @@ import java.util.List;
 
 @Service
 public class StockMovementService {
+
+    private static final int CHATBOT_RESULT_LIMIT = 20;
 
     private final StockItemRepository itemRepository;
     private final StockTransactionRepository transactionRepository;
@@ -31,12 +35,10 @@ public class StockMovementService {
     }
 
     // RECORD STOCK MOVEMENT
-    // Do not expose publicly before JWT authorization.
     @Transactional
     public StockMovementResponse recordMovement(
             StockMovementRequest request) {
 
-        // Validate request before accessing database
         if (request == null
                 || request.getStockItemId() == null
                 || request.getTransactionType() == null
@@ -59,9 +61,9 @@ public class StockMovementService {
         }
 
         StockTransactionType type = request.getTransactionType();
+
         int quantity = request.getQuantity();
 
-        // Require reason for damage, wastage and adjustments
         if ((type == StockTransactionType.DAMAGE
                 || type == StockTransactionType.WASTAGE
                 || type == StockTransactionType.ADJUSTMENT_IN
@@ -75,7 +77,7 @@ public class StockMovementService {
             );
         }
 
-        // Lock stock item to prevent concurrent quantity changes
+        // Lock stock item before changing quantity
         StockItem item = itemRepository
                 .findByIdForUpdate(request.getStockItemId())
                 .orElseThrow(() -> new ResponseStatusException(
@@ -84,6 +86,7 @@ public class StockMovementService {
                 ));
 
         if (!item.isActive()) {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Cannot move stock for inactive item"
@@ -93,6 +96,7 @@ public class StockMovementService {
         Integer currentQuantity = item.getCurrentQuantity();
 
         if (currentQuantity == null || currentQuantity < 0) {
+
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Invalid current stock quantity"
@@ -103,14 +107,18 @@ public class StockMovementService {
         int after;
 
         try {
+
             after = switch (type) {
+
                 case STOCK_IN, ADJUSTMENT_IN ->
                         Math.addExact(before, quantity);
 
                 case STOCK_OUT, DAMAGE, WASTAGE, ADJUSTMENT_OUT ->
                         Math.subtractExact(before, quantity);
             };
+
         } catch (ArithmeticException ex) {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Stock quantity exceeds supported range"
@@ -118,17 +126,19 @@ public class StockMovementService {
         }
 
         if (after < 0) {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Insufficient stock. Available: " + before
             );
         }
 
-        // Update current stock quantity
+        // Update item quantity
         item.setCurrentQuantity(after);
+
         itemRepository.saveAndFlush(item);
 
-        // Record transaction history
+        // Save transaction history
         StockTransaction transaction = new StockTransaction();
 
         transaction.setStockItem(item);
@@ -138,11 +148,8 @@ public class StockMovementService {
         transaction.setQuantityAfter(after);
         transaction.setReason(request.getReason());
 
-        // Set audit details after Auth module integration:
-        // transaction.setPerformedBy(authenticatedUserId);
-
-        // GRN / Job Card reference details should be set
-        // by trusted backend integration services.
+        // Audit user and external references should be set
+        // by trusted backend integration after authentication.
 
         StockTransaction saved =
                 transactionRepository.saveAndFlush(transaction);
@@ -150,7 +157,7 @@ public class StockMovementService {
         return mapToResponse(saved);
     }
 
-    // GET ALL STOCK TRANSACTION HISTORY
+    // EXISTING: GET ALL TRANSACTIONS
     @Transactional(readOnly = true)
     public List<StockMovementResponse> getAllTransactions() {
 
@@ -161,11 +168,13 @@ public class StockMovementService {
                 .toList();
     }
 
-    // GET TRANSACTION HISTORY FOR ONE STOCK ITEM
+    // EXISTING: GET ONE ITEM'S TRANSACTION HISTORY
     @Transactional(readOnly = true)
-    public List<StockMovementResponse> getItemTransactions(Long itemId) {
+    public List<StockMovementResponse> getItemTransactions(
+            Long itemId) {
 
         if (itemId == null || itemId <= 0) {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Valid stock item ID is required"
@@ -173,6 +182,7 @@ public class StockMovementService {
         }
 
         if (!itemRepository.existsById(itemId)) {
+
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
                     "Stock item not found"
@@ -181,6 +191,44 @@ public class StockMovementService {
 
         return transactionRepository
                 .findByStockItemIdOrderByCreatedAtDesc(itemId)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    // NEW: GET LATEST 20 TRANSACTIONS
+    // DATABASE-LEVEL LIMIT FOR CHATBOT
+    @Transactional(readOnly = true)
+    public List<StockMovementResponse> getRecentTransactions() {
+
+        return transactionRepository
+                .findAllByOrderByCreatedAtDesc(
+                        PageRequest.of(0, CHATBOT_RESULT_LIMIT)
+                )
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    // UPDATED: FILTER TRANSACTIONS BY TYPE
+    // DATABASE-LEVEL LIMIT FOR CHATBOT
+    @Transactional(readOnly = true)
+    public List<StockMovementResponse> getTransactionsByType(
+            StockTransactionType transactionType) {
+
+        if (transactionType == null) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Valid transaction type is required"
+            );
+        }
+
+        return transactionRepository
+                .findByTransactionTypeOrderByCreatedAtDesc(
+                        transactionType,
+                        PageRequest.of(0, CHATBOT_RESULT_LIMIT)
+                )
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
@@ -204,10 +252,14 @@ public class StockMovementService {
                 transaction.getTransactionType()
         );
 
-        response.setQuantity(transaction.getQuantity());
+        response.setQuantity(
+                transaction.getQuantity()
+        );
+
         response.setQuantityBefore(
                 transaction.getQuantityBefore()
         );
+
         response.setQuantityAfter(
                 transaction.getQuantityAfter()
         );
@@ -215,13 +267,22 @@ public class StockMovementService {
         response.setReferenceType(
                 transaction.getReferenceType()
         );
+
         response.setReferenceId(
                 transaction.getReferenceId()
         );
 
-        response.setReason(transaction.getReason());
-        response.setPerformedBy(transaction.getPerformedBy());
-        response.setCreatedAt(transaction.getCreatedAt());
+        response.setReason(
+                transaction.getReason()
+        );
+
+        response.setPerformedBy(
+                transaction.getPerformedBy()
+        );
+
+        response.setCreatedAt(
+                transaction.getCreatedAt()
+        );
 
         return response;
     }
