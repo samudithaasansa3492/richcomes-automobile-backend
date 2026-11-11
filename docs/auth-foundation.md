@@ -65,3 +65,40 @@ the existing GarageApplicationTests loads the full application context.
 3. Add login/JWT configuration and enforce employee/account status and permissions.
 4. Define refresh/logout/revocation behavior and test unauthorized/forbidden paths.
 5. Resolve UUID employee audit identifiers separately (audit entity_id is BIGINT).
+
+## Account service phase
+
+`UserAccountService` now provides internal create/get/replaceRoles/enable/disable
+operations. Request validation also runs inside the service, so it does not depend
+on a future controller's @Valid annotation. Domain error codes are carried by
+AccountOperationException; future HTTP handlers must map these to safe responses.
+
+Creation normalizes usernames, resolves existing roles, and encodes passwords with
+an explicitly configured bcrypt-only DelegatingPasswordEncoder (cost 12). Tune the
+cost against deployment hardware before production. Passwords must be 15–72 Java
+characters and at most 72 UTF-8 bytes. Passwords are never trimmed or truncated.
+DTO logging redacts the raw password; request serialization treats it as write-only.
+Responses do not contain password/hash fields. Do not log request bodies or raw
+validation exceptions in the future HTTP layer.
+
+New accounts remain disabled. Creating a disabled account for an inactive employee
+is allowed, but enabling it is rejected. Enabling also requires at least one role.
+Role replacement requires a nonempty set and validates every role before mutation.
+Role/permission seeds and initial administrator provisioning are not included.
+
+These methods are NOT exposed as HTTP endpoints and do not yet authenticate callers.
+Before exposing mutations, implement administrator permission checks, concurrency
+control for administrative updates, and protection against removal/disable of the
+last administrator. Login/JWT must recheck employee.active and account.enabled;
+this service alone does not enforce access on requests or revoke existing tokens.
+
+Compile and run only the isolated identity tests (no shared DB connection):
+
+```bash
+./mvnw clean compile
+./mvnw -Dtest=IdentityModelTest,IdentityPersistenceTest,UserAccountServiceTest test
+```
+
+UserAccountServiceTest uses mocked repositories and a real Bean Validator, with a
+real encoder test for salted hashing and password matching. It does not start Spring
+Boot or Flyway. Transactional service integration and HTTP security are later checks.
