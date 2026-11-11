@@ -291,8 +291,9 @@ class UserAccountServiceTest {
     void paginationIsBoundedAndSortedById() {
         var pageable = org.springframework.data.domain.PageRequest.of(0, 20,
                 org.springframework.data.domain.Sort.by("id"));
+        var account = existingAccount();
         when(accounts.findAll(pageable)).thenReturn(new org.springframework.data.domain.PageImpl<>(
-                java.util.List.of(existingAccount()), pageable, 1));
+                java.util.List.of(account), pageable, 1));
         var result = service.listAccounts(0, 20);
         assertEquals(1L, result.totalElements());
         assertEquals("cashier.one", result.content().getFirst().username());
