@@ -76,6 +76,13 @@ class IdentityPersistenceTest {
         assertTrue(persistence.isLoaded(loaded, "employee"));
         assertTrue(persistence.isLoaded(loaded, "roles"));
         assertTrue(persistence.isLoaded(loadedRole, "permissions"));
+        Long accountId = loaded.getId();
+        entityManager.clear();
+        UserAccount byId = accounts.findOneById(accountId).orElseThrow();
+        assertEquals("cashier.one", byId.getUsername());
+        assertTrue(persistence.isLoaded(byId, "employee"));
+        assertTrue(persistence.isLoaded(byId, "roles"));
+        assertTrue(persistence.isLoaded(byId.getRoles().iterator().next(), "permissions"));
     }
 
     @Test

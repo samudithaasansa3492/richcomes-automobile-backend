@@ -13,6 +13,9 @@ public interface UserAccountRepository extends JpaRepository<UserAccount, Long> 
     @EntityGraph(attributePaths = {"employee", "roles", "roles.permissions"})
     Optional<UserAccount> findByUsername(String username);
 
+    @EntityGraph(attributePaths = {"employee", "roles", "roles.permissions"})
+    Optional<UserAccount> findOneById(Long id);
+
     boolean existsByUsername(String username);
 
     boolean existsByEmployee_Id(UUID employeeId);

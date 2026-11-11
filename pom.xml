@@ -65,6 +65,17 @@
             <artifactId>spring-boot-starter-flyway</artifactId>
         </dependency>
 
+        <!-- JWT verification and signing; versions managed by Spring Boot -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+
         <!-- Flyway PostgreSQL Support -->
         <dependency>
             <groupId>org.flywaydb</groupId>
