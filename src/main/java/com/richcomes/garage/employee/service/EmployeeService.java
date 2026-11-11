@@ -1,18 +1,17 @@
-
 package com.richcomes.garage.employee.service;
 
+import com.richcomes.garage.auth.service.AdminAccessGuard;
 import com.richcomes.garage.employee.dto.EmployeeRequest;
 import com.richcomes.garage.employee.dto.EmployeeResponse;
 import com.richcomes.garage.employee.entity.Employee;
 import com.richcomes.garage.employee.repository.EmployeeRepository;
-
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.server.ResponseStatusException;
-
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 @Transactional
@@ -20,7 +19,11 @@ public class EmployeeService {
 
     private final EmployeeRepository employeeRepository;
 
-    public EmployeeService(EmployeeRepository employeeRepository) {
+    private final AdminAccessGuard adminAccess;
+
+    public EmployeeService(EmployeeRepository employeeRepository,
+                           AdminAccessGuard adminAccess) {
+        this.adminAccess = adminAccess;
         this.employeeRepository = employeeRepository;
     }
 
@@ -67,7 +70,6 @@ public class EmployeeService {
     // 4. Update employee
     public EmployeeResponse updateEmployee(
             UUID id, EmployeeRequest request) {
-
         Employee employee = findEmployee(id);
 
         if (!employee.getEmployeeCode()
@@ -92,7 +94,10 @@ public class EmployeeService {
     }
 
     // 5. Deactivate employee
-    public EmployeeResponse deactivateEmployee(UUID id) {
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public EmployeeResponse deactivateEmployee(UUID id, Long actorId) {
+        adminAccess.lockAdministration();
+        adminAccess.protectEmployee(id, actorId);
 
         Employee employee = findEmployee(id);
 

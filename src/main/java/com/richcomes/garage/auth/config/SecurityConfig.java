@@ -38,6 +38,12 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/employees/{id}").hasAuthority("employee:update")
                         .requestMatchers(HttpMethod.PATCH, "/api/employees/{id}/deactivate")
                             .hasAuthority("employee:deactivate")
+                        .requestMatchers(HttpMethod.POST, "/api/accounts").hasAuthority("account:create")
+                        .requestMatchers(HttpMethod.GET, "/api/accounts", "/api/accounts/{id}")
+                            .hasAuthority("account:read")
+                        .requestMatchers(HttpMethod.PUT, "/api/accounts/{id}/roles").hasAuthority("account:manage")
+                        .requestMatchers(HttpMethod.PATCH, "/api/accounts/{id}/enable", "/api/accounts/{id}/disable")
+                            .hasAuthority("account:manage")
                         .anyRequest().denyAll())
                 .build();
     }

@@ -56,6 +56,7 @@ class SecurityFlowTest {
     @Autowired private AccessTokenService tokens;
     @Autowired private JwtEncoder encoder;
     @Autowired private JwtSettings settings;
+    @Autowired private com.richcomes.garage.auth.service.UserAccountService accountService;
     private MockMvc mvc;
     private UserAccount account;
     private Employee employee;
@@ -66,7 +67,7 @@ class SecurityFlowTest {
 
     @BeforeEach
     void setUp() {
-        reset(accounts);
+        reset(accounts, accountService);
         mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         employee = new Employee();
         ReflectionTestUtils.setField(employee, "id", UUID.fromString("00000000-0000-0000-0000-000000000001"));
@@ -210,12 +211,84 @@ class SecurityFlowTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    @Test
+    void accountEndpointsDenyAnonymousAndUnprivilegedAccess() throws Exception {
+        mvc.perform(get("/api/accounts")).andExpect(status().isUnauthorized());
+        for (var request : java.util.List.of(get("/api/accounts"), get("/api/accounts/7"),
+                post("/api/accounts"), put("/api/accounts/7/roles"),
+                patch("/api/accounts/7/enable"), patch("/api/accounts/7/disable"))) {
+            mvc.perform(request.header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
+        }
+        verifyNoInteractions(accountService);
+    }
+
+    @Test
+    void accountReadPermissionDoesNotGrantManagement() throws Exception {
+        role.grantPermission(new Permission("account:read", "Read accounts"));
+        when(accountService.listAccounts(0, 20)).thenReturn(new com.richcomes.garage.auth.dto.AccountPageResponse(
+                java.util.List.of(), 0, 20, 0, 0));
+        mvc.perform(get("/api/accounts").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(header().string("Cache-Control", "no-store"));
+        mvc.perform(patch("/api/accounts/7/disable").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void managementUsesAuthenticatedActorAndSafeDomainErrors() throws Exception {
+        role.grantPermission(new Permission("account:manage", "Manage accounts"));
+        when(accountService.disableAccount(7L, 42L)).thenThrow(new com.richcomes.garage.auth.exception.AccountOperationException(
+                com.richcomes.garage.auth.exception.AccountOperationException.Code.LAST_ACTIVE_ADMIN,
+                "At least one active administrator must remain"));
+        mvc.perform(patch("/api/accounts/7/disable").header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"actorId\":999}"))
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("LAST_ACTIVE_ADMIN"));
+        verify(accountService).disableAccount(7L, 42L);
+        mvc.perform(put("/api/accounts/7/roles").header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"roleCodes\":[\"CASHIER\"]}"))
+                .andExpect(status().isOk());
+        verify(accountService).replaceRoles(eq(7L), any(), eq(42L));
+        mvc.perform(patch("/api/accounts/7/enable").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        verify(accountService).enableAccount(7L);
+        mvc.perform(delete("/api/accounts/7").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void accountCreationReturnsLocationWithoutPassword() throws Exception {
+        role.grantPermission(new Permission("account:create", "Create account"));
+        when(accountService.createAccount(any())).thenReturn(new com.richcomes.garage.auth.dto.AccountResponse(
+                7L, employee.getId(), "new.account", false, java.util.Set.of("CASHIER"), null, null));
+        mvc.perform(post("/api/accounts").header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON).content("""
+                        {"employeeId":"00000000-0000-0000-0000-000000000001",
+                         "username":"new.account","password":"correct horse battery staple","roleCodes":["CASHIER"]}
+                        """))
+                .andExpect(status().isCreated()).andExpect(header().string("Location", "/api/accounts/7"))
+                .andExpect(jsonPath("$.enabled").value(false)).andExpect(jsonPath("$.password").doesNotExist())
+                .andExpect(jsonPath("$.passwordHash").doesNotExist());
+    }
+
+    @Test
+    void malformedAccountRequestsDoNotExposeInput() throws Exception {
+        role.grantPermission(new Permission("account:create", "Create account"));
+        mvc.perform(post("/api/accounts").header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"secret\"}"))
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.message").value("Invalid request"));
+        verifyNoInteractions(accountService);
+    }
+
     @Configuration(proxyBeanMethods = false)
     @EnableWebMvc
     @Import({SecurityConfig.class, SecurityErrorHandlers.class, AccountJwtAuthenticationConverter.class,
             AuthController.class, AuthExceptionHandler.class, AuthenticationService.class, AccessTokenService.class,
-            EmployeeProbe.class})
+            EmployeeProbe.class, com.richcomes.garage.auth.controller.AccountController.class,
+            com.richcomes.garage.auth.controller.AccountExceptionHandler.class})
     static class TestConfig {
+        @Bean com.richcomes.garage.auth.service.UserAccountService accountService() {
+            return mock(com.richcomes.garage.auth.service.UserAccountService.class);
+        }
         @Bean UserAccountRepository accounts() { return mock(UserAccountRepository.class); }
         @Bean PasswordEncoder passwordEncoder() {
             // Reduced test-only cost; production PasswordConfig remains cost 12.

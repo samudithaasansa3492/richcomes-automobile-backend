@@ -42,6 +42,7 @@ class UserAccountServiceTest {
     private RoleRepository roles;
     private PasswordEncoder encoder;
     private UserAccountService service;
+    private com.richcomes.garage.auth.service.AdminAccessGuard guard;
     private Employee employee;
     private Role cashier;
 
@@ -51,7 +52,9 @@ class UserAccountServiceTest {
         employees = mock(EmployeeRepository.class);
         roles = mock(RoleRepository.class);
         encoder = mock(PasswordEncoder.class);
-        service = new UserAccountService(accounts, employees, roles, encoder, VALIDATORS.getValidator());
+        guard = mock(com.richcomes.garage.auth.service.AdminAccessGuard.class);
+        service = new UserAccountService(accounts, employees, roles, encoder, VALIDATORS.getValidator(),
+                guard);
         employee = new Employee();
         ReflectionTestUtils.setField(employee, "id", EMPLOYEE_ID);
         cashier = new Role("CASHIER", "Cashier");
@@ -181,14 +184,14 @@ class UserAccountServiceTest {
     void enablesAndDisablesExistingAccount() {
         existingAccount();
         assertTrue(service.enableAccount(1L).enabled());
-        assertFalse(service.disableAccount(1L).enabled());
+        assertFalse(service.disableAccount(1L, 99L).enabled());
     }
 
     @Test
     void roleReplacementDoesNotPartiallyMutateWhenARoleIsMissing() {
         UserAccount account = existingAccount();
         assertCode(UNKNOWN_ROLE, () -> service.replaceRoles(1L,
-                new AccountRolesUpdateRequest(Set.of("CASHIER", "UNKNOWN"))));
+                new AccountRolesUpdateRequest(Set.of("CASHIER", "UNKNOWN")), 99L));
         assertEquals(Set.of(cashier), account.getRoles());
         verify(accounts, never()).saveAndFlush(any());
     }
@@ -198,7 +201,7 @@ class UserAccountServiceTest {
         UserAccount account = existingAccount();
         Role technician = new Role("TECHNICIAN", "Technician");
         when(roles.findByCode("TECHNICIAN")).thenReturn(Optional.of(technician));
-        var response = service.replaceRoles(1L, new AccountRolesUpdateRequest(Set.of("TECHNICIAN")));
+        var response = service.replaceRoles(1L, new AccountRolesUpdateRequest(Set.of("TECHNICIAN")), 99L);
         assertEquals(Set.of("TECHNICIAN"), response.roleCodes());
         assertEquals(Set.of(technician), account.getRoles());
     }
@@ -206,7 +209,7 @@ class UserAccountServiceTest {
     @Test
     void rejectsInvalidOrMissingAccountIds() {
         assertCode(INVALID_REQUEST, () -> service.getAccount(null));
-        assertCode(INVALID_REQUEST, () -> service.disableAccount(0L));
+        assertCode(INVALID_REQUEST, () -> service.disableAccount(0L, 99L));
         assertCode(ACCOUNT_NOT_FOUND, () -> service.getAccount(100L));
     }
 
@@ -234,6 +237,68 @@ class UserAccountServiceTest {
         assertFalse(realEncoder.matches("wrong password", first));
         assertThrows(IllegalArgumentException.class,
                 () -> realEncoder.matches(RAW_PASSWORD, "{noop}" + RAW_PASSWORD));
+    }
+
+    @Test
+    void rejectedOwnerRemovalDoesNotMutateAccount() {
+        var account = existingAccount(); account.enable();
+        doThrow(new AccountOperationException(LAST_ACTIVE_ADMIN, "Last admin"))
+                .when(guard).protectOwner(account);
+        assertCode(LAST_ACTIVE_ADMIN, () -> service.disableAccount(1L, 99L));
+        assertTrue(account.isEnabled());
+        var order = inOrder(guard, accounts);
+        order.verify(guard).rejectSelf(1L, 99L);
+        order.verify(guard).lockAdministration();
+        order.verify(accounts).findById(1L);
+        order.verify(guard).protectOwner(account);
+        verify(accounts, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void removingOwnerRoleChecksGuardBeforeMutatingRoles() {
+        var account = existingAccount();
+        var owner = new Role("OWNER_ADMIN", "Admin");
+        account.assignRole(owner); account.enable();
+        doThrow(new AccountOperationException(LAST_ACTIVE_ADMIN, "Last admin"))
+                .when(guard).protectOwner(account);
+        assertCode(LAST_ACTIVE_ADMIN, () -> service.replaceRoles(1L,
+                new AccountRolesUpdateRequest(Set.of("CASHIER")), 99L));
+        assertTrue(account.getRoles().contains(owner));
+        verify(accounts, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void retainingOwnerRoleDoesNotRemoveAdministratorAccess() {
+        var account = existingAccount();
+        var owner = new Role("OWNER_ADMIN", "Admin");
+        account.assignRole(owner); account.enable();
+        when(roles.findByCode("OWNER_ADMIN")).thenReturn(Optional.of(owner));
+        service.replaceRoles(1L, new AccountRolesUpdateRequest(Set.of("OWNER_ADMIN")), 99L);
+        verify(guard, never()).protectOwner(any());
+        assertEquals(Set.of(owner), account.getRoles());
+    }
+
+    @Test
+    void selfRoleChangesAreRejectedBeforeReadingOrWritingAccount() {
+        doThrow(new AccountOperationException(SELF_MODIFICATION, "Self change"))
+                .when(guard).rejectSelf(1L, 1L);
+        assertCode(SELF_MODIFICATION, () -> service.replaceRoles(1L,
+                new AccountRolesUpdateRequest(Set.of("CASHIER")), 1L));
+        verifyNoInteractions(accounts);
+    }
+
+    @Test
+    void paginationIsBoundedAndSortedById() {
+        var pageable = org.springframework.data.domain.PageRequest.of(0, 20,
+                org.springframework.data.domain.Sort.by("id"));
+        when(accounts.findAll(pageable)).thenReturn(new org.springframework.data.domain.PageImpl<>(
+                java.util.List.of(existingAccount()), pageable, 1));
+        var result = service.listAccounts(0, 20);
+        assertEquals(1L, result.totalElements());
+        assertEquals("cashier.one", result.content().getFirst().username());
+        assertCode(INVALID_REQUEST, () -> service.listAccounts(-1, 20));
+        assertCode(INVALID_REQUEST, () -> service.listAccounts(0, 101));
+        assertCode(INVALID_REQUEST, () -> service.listAccounts(0, 0));
     }
 
     private UserAccount existingAccount() {

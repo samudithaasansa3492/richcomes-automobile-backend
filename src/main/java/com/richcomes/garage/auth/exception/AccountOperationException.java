@@ -1,6 +1,6 @@
 package com.richcomes.garage.auth.exception;
 
-/** Domain failure; the future HTTP layer maps codes to safe API responses. */
+/** Domain failure mapped to a safe API response by the account exception handler. */
 public class AccountOperationException extends RuntimeException {
 
     public enum Code {
@@ -12,7 +12,10 @@ public class AccountOperationException extends RuntimeException {
         UNKNOWN_ROLE,
         EMPLOYEE_INACTIVE,
         ACCOUNT_HAS_NO_ROLES,
-        ACCOUNT_CONFLICT
+        ACCOUNT_CONFLICT,
+        SELF_MODIFICATION,
+        LAST_ACTIVE_ADMIN,
+        ADMIN_ROLE_NOT_CONFIGURED
     }
 
     private final Code code;

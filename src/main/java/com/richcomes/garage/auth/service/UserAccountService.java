@@ -1,6 +1,7 @@
 package com.richcomes.garage.auth.service;
 
 import com.richcomes.garage.auth.dto.AccountCreateRequest;
+import com.richcomes.garage.auth.dto.AccountPageResponse;
 import com.richcomes.garage.auth.dto.AccountResponse;
 import com.richcomes.garage.auth.dto.AccountRolesUpdateRequest;
 import com.richcomes.garage.auth.entity.Role;
@@ -10,27 +11,29 @@ import com.richcomes.garage.auth.repository.RoleRepository;
 import com.richcomes.garage.auth.repository.UserAccountRepository;
 import com.richcomes.garage.employee.repository.EmployeeRepository;
 import jakarta.validation.Validator;
-import org.hibernate.exception.ConstraintViolationException;
-import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.hibernate.exception.ConstraintViolationException;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
+import org.springframework.transaction.annotation.Transactional;
 
 import static com.richcomes.garage.auth.exception.AccountOperationException.Code.*;
 
 /**
- * Internal account operations. No HTTP endpoints are exposed in this phase.
- * Future callers must enforce administrator authorization before invoking mutations.
+ * Account operations behind permission-protected HTTP endpoints.
+ * Access changes share a database lock to preserve the last active administrator.
  */
 @Service
-@Transactional
+@Transactional(isolation = Isolation.READ_COMMITTED)
 public class UserAccountService {
 
     private final UserAccountRepository accounts;
@@ -38,14 +41,17 @@ public class UserAccountService {
     private final RoleRepository roles;
     private final PasswordEncoder passwordEncoder;
     private final Validator validator;
+    private final AdminAccessGuard adminAccess;
 
     public UserAccountService(UserAccountRepository accounts, EmployeeRepository employees,
-                              RoleRepository roles, PasswordEncoder passwordEncoder, Validator validator) {
+                              RoleRepository roles, PasswordEncoder passwordEncoder, Validator validator,
+                              AdminAccessGuard adminAccess) {
         this.accounts = accounts;
         this.employees = employees;
         this.roles = roles;
         this.passwordEncoder = passwordEncoder;
         this.validator = validator;
+        this.adminAccess = adminAccess;
     }
 
     public AccountResponse createAccount(AccountCreateRequest request) {
@@ -94,10 +100,28 @@ public class UserAccountService {
         return toResponse(findAccount(accountId));
     }
 
-    public AccountResponse replaceRoles(Long accountId, AccountRolesUpdateRequest request) {
+    @Transactional(readOnly = true)
+    public AccountPageResponse listAccounts(int page, int size) {
+        if (page < 0 || size < 1 || size > 100) {
+            throw failure(INVALID_REQUEST, "Page must be nonnegative and size must be between 1 and 100");
+        }
+        // Page roots only; collection fetch joins would paginate in memory.
+        var result = accounts.findAll(PageRequest.of(
+                page, size, Sort.by("id")));
+        return new AccountPageResponse(
+                result.getContent().stream().map(this::toResponse).toList(), page, size,
+                result.getTotalElements(), result.getTotalPages());
+    }
+
+    public AccountResponse replaceRoles(Long accountId, AccountRolesUpdateRequest request, Long actorId) {
         validate(request);
+        adminAccess.rejectSelf(accountId, actorId);
+        adminAccess.lockAdministration();
         UserAccount account = findAccount(accountId);
         Set<Role> replacements = resolveRoles(request.roleCodes());
+        if (replacements.stream().noneMatch(role -> "OWNER_ADMIN".equals(role.getCode()))) {
+            adminAccess.protectOwner(account);
+        }
         // Resolve all codes before changing managed state.
         new HashSet<>(account.getRoles()).forEach(account::removeRole);
         replacements.forEach(account::assignRole);
@@ -105,6 +129,7 @@ public class UserAccountService {
     }
 
     public AccountResponse enableAccount(Long accountId) {
+        adminAccess.lockAdministration();
         UserAccount account = findAccount(accountId);
         if (!account.getEmployee().isActive()) {
             throw failure(EMPLOYEE_INACTIVE, "Cannot enable an account for an inactive employee");
@@ -116,8 +141,11 @@ public class UserAccountService {
         return toResponse(accounts.saveAndFlush(account));
     }
 
-    public AccountResponse disableAccount(Long accountId) {
+    public AccountResponse disableAccount(Long accountId, Long actorId) {
+        adminAccess.rejectSelf(accountId, actorId);
+        adminAccess.lockAdministration();
         UserAccount account = findAccount(accountId);
+        adminAccess.protectOwner(account);
         account.disable();
         return toResponse(accounts.saveAndFlush(account));
     }

@@ -1,17 +1,15 @@
-
 package com.richcomes.garage.employee.controller;
 
+import com.richcomes.garage.auth.security.AccountPrincipal;
 import com.richcomes.garage.employee.dto.EmployeeRequest;
 import com.richcomes.garage.employee.dto.EmployeeResponse;
 import com.richcomes.garage.employee.service.EmployeeService;
-
 import jakarta.validation.Valid;
-
-import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
-
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/employees")
@@ -59,8 +57,10 @@ public class EmployeeController {
     // Deactivate Employee
     @PatchMapping("/{id}/deactivate")
     public EmployeeResponse deactivateEmployee(
-            @PathVariable UUID id) {
+            @PathVariable UUID id,
+            @AuthenticationPrincipal
+            AccountPrincipal actor) {
 
-        return employeeService.deactivateEmployee(id);
+        return employeeService.deactivateEmployee(id, actor.accountId());
     }
 }
