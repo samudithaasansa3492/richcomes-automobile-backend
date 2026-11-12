@@ -13,7 +13,6 @@ public class InvoiceResponse {
     private Long customerId;
     private Long vehicleId;
     private Long serviceJobId;
-    private Long branchId;
     private LocalDateTime invoiceDate;
     private InvoiceStatus status;
     private BigDecimal subtotal;
@@ -62,14 +61,6 @@ public class InvoiceResponse {
 
     public void setServiceJobId(Long serviceJobId) {
         this.serviceJobId = serviceJobId;
-    }
-
-    public Long getBranchId() {
-        return branchId;
-    }
-
-    public void setBranchId(Long branchId) {
-        this.branchId = branchId;
     }
 
     public LocalDateTime getInvoiceDate() {

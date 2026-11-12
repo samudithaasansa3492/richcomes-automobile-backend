@@ -16,6 +16,7 @@ import java.util.List;
 @RequestMapping("/api/v1/audit-logs")
 public class AuditLogController {
 
+
     private final AuditLogService auditLogService;
 
     public AuditLogController(AuditLogService auditLogService) {
