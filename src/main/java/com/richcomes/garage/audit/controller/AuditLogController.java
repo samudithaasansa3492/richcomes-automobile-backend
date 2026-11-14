@@ -1,14 +1,12 @@
 package com.richcomes.garage.audit.controller;
 
-import com.richcomes.garage.audit.dto.AuditLogCreateRequest;
 import com.richcomes.garage.audit.dto.AuditLogResponse;
 import com.richcomes.garage.audit.service.AuditLogService;
-import jakarta.validation.Valid;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.data.domain.Page;
 import java.time.LocalDateTime;
+import org.springframework.format.annotation.DateTimeFormat;
 
 import java.util.List;
 
@@ -23,8 +21,8 @@ public class AuditLogController {
         this.auditLogService = auditLogService;
     }
 
-    // Audit entries must be created internally by trusted services.
-    // Remove the public POST endpoint.
+    // Audit records are created internally by trusted services.
+    // Restrict these read endpoints in your existing Spring Security configuration.
 
     @GetMapping
     public ResponseEntity<Page<AuditLogResponse>> getAllAuditLogs(
@@ -53,8 +51,8 @@ public class AuditLogController {
     }
     @GetMapping("/date-range")
     public ResponseEntity<List<AuditLogResponse>> getAuditLogsByDateRange(
-            @RequestParam LocalDateTime start,
-            @RequestParam LocalDateTime end) {
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end) {
 
         if (start.isAfter(end)) {
             return ResponseEntity.badRequest().build();
