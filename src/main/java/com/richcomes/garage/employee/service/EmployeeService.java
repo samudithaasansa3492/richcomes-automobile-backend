@@ -68,8 +68,14 @@ public class EmployeeService {
     }
 
     // 4. Update employee
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public EmployeeResponse updateEmployee(
             UUID id, EmployeeRequest request) {
+        adminAccess.lockAdministration();
+        adminAccess.rejectTechnicalEmployeeMutation(id);
+        if (request.position() == com.richcomes.garage.employee.entity.EmployeePosition.TECHNICIAN) {
+            adminAccess.rejectTechnicianWithAccount(id);
+        }
         Employee employee = findEmployee(id);
 
         if (!employee.getEmployeeCode()

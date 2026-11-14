@@ -30,7 +30,7 @@ import static com.richcomes.garage.auth.exception.AccountOperationException.Code
 
 /**
  * Account operations behind permission-protected HTTP endpoints.
- * Access changes share a database lock to preserve the last active administrator.
+ * Access changes share a database lock to preserve the last active owner.
  */
 @Service
 @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -56,6 +56,7 @@ public class UserAccountService {
 
     public AccountResponse createAccount(AccountCreateRequest request) {
         validate(request);
+        adminAccess.lockAdministration();
         String username;
         try {
             username = UserAccount.normalizeUsername(request.username());
@@ -68,6 +69,7 @@ public class UserAccountService {
         }
         var employee = employees.findById(request.employeeId())
                 .orElseThrow(() -> failure(EMPLOYEE_NOT_FOUND, "Employee not found"));
+        requireLoginEmployee(employee);
         if (accounts.existsByEmployee_Id(employee.getId())) {
             throw failure(EMPLOYEE_ALREADY_HAS_ACCOUNT, "Employee already has an account");
         }
@@ -118,8 +120,10 @@ public class UserAccountService {
         adminAccess.rejectSelf(accountId, actorId);
         adminAccess.lockAdministration();
         UserAccount account = findAccount(accountId);
+        requireBusinessTarget(account);
+        requireLoginEmployee(account.getEmployee());
         Set<Role> replacements = resolveRoles(request.roleCodes());
-        if (replacements.stream().noneMatch(role -> "OWNER_ADMIN".equals(role.getCode()))) {
+        if (replacements.stream().noneMatch(role -> "OWNER".equals(role.getCode()))) {
             adminAccess.protectOwner(account);
         }
         // Resolve all codes before changing managed state.
@@ -131,12 +135,15 @@ public class UserAccountService {
     public AccountResponse enableAccount(Long accountId) {
         adminAccess.lockAdministration();
         UserAccount account = findAccount(accountId);
+        requireBusinessTarget(account);
+        requireLoginEmployee(account.getEmployee());
         if (!account.getEmployee().isActive()) {
             throw failure(EMPLOYEE_INACTIVE, "Cannot enable an account for an inactive employee");
         }
         if (account.getRoles().isEmpty()) {
             throw failure(ACCOUNT_HAS_NO_ROLES, "Assign at least one role before enabling an account");
         }
+        resolveRoles(account.getRoles().stream().map(Role::getCode).collect(Collectors.toSet()));
         account.enable();
         return toResponse(accounts.saveAndFlush(account));
     }
@@ -145,6 +152,7 @@ public class UserAccountService {
         adminAccess.rejectSelf(accountId, actorId);
         adminAccess.lockAdministration();
         UserAccount account = findAccount(accountId);
+        requireBusinessTarget(account);
         adminAccess.protectOwner(account);
         account.disable();
         return toResponse(accounts.saveAndFlush(account));
@@ -161,10 +169,25 @@ public class UserAccountService {
     private Set<Role> resolveRoles(Set<String> codes) {
         Set<Role> result = new LinkedHashSet<>();
         for (String code : codes) {
+            if (!Set.of("OWNER", "CASHIER").contains(code)) {
+                throw failure(UNKNOWN_ROLE, "Only OWNER and CASHIER roles can be assigned through business account APIs");
+            }
             result.add(roles.findByCode(code)
                     .orElseThrow(() -> failure(UNKNOWN_ROLE, "One or more role codes do not exist")));
         }
         return result;
+    }
+
+    private void requireLoginEmployee(com.richcomes.garage.employee.entity.Employee employee) {
+        if (employee.getPosition() == com.richcomes.garage.employee.entity.EmployeePosition.TECHNICIAN) {
+            throw failure(INVALID_REQUEST, "Technicians cannot have system accounts");
+        }
+    }
+
+    private void requireBusinessTarget(UserAccount account) {
+        if (account.getRoles().stream().anyMatch(role -> "ADMIN".equals(role.getCode()))) {
+            throw failure(TECHNICAL_ACCOUNT_PROTECTED, "Technical accounts cannot be managed through business account APIs");
+        }
     }
 
     private <T> void validate(T request) {

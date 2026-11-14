@@ -40,7 +40,7 @@ class FirstAdminProvisionerTest {
         jdbc = new JdbcTemplate(dataSource);
         for (String table : new String[]{"user_account_roles", "role_permissions", "user_accounts",
                 "roles", "permissions", "employees"}) jdbc.execute("DELETE FROM garage." + table);
-        jdbc.update("INSERT INTO garage.roles(id, code, description) VALUES (1, 'OWNER_ADMIN', 'Owner')");
+        jdbc.update("INSERT INTO garage.roles(id, code, description) VALUES (1, 'OWNER', 'Owner')");
         String[] codes = {"employee:read", "employee:create", "employee:update", "employee:deactivate",
                 "account:read", "account:create", "account:manage"};
         for (int i = 0; i < codes.length; i++) {
@@ -67,7 +67,7 @@ class FirstAdminProvisionerTest {
     @Test void refusesSecondActiveAdministratorWithoutChangingExistingAccount() {
         long id = provisioner.provision(employeeId, "first.admin", PASSWORD.toCharArray());
         String hash = jdbc.queryForObject("SELECT password_hash FROM garage.user_accounts WHERE id=?", String.class, id);
-        assertCode(ADMIN_ALREADY_EXISTS, () -> provisioner.provision(employee(), "other.admin", PASSWORD.toCharArray()));
+        assertCode(OWNER_ALREADY_EXISTS, () -> provisioner.provision(employee(), "other.admin", PASSWORD.toCharArray()));
         assertEquals(1, countAccounts());
         assertEquals(hash, jdbc.queryForObject("SELECT password_hash FROM garage.user_accounts WHERE id=?", String.class, id));
     }
@@ -158,13 +158,19 @@ class FirstAdminProvisionerTest {
             start.countDown();
             var results = Arrays.asList(a.get(20, TimeUnit.SECONDS), b.get(20, TimeUnit.SECONDS));
             assertEquals(1, results.stream().filter("CREATED"::equals).count());
-            assertEquals(1, results.stream().filter("ADMIN_ALREADY_EXISTS"::equals).count());
+            assertEquals(1, results.stream().filter("OWNER_ALREADY_EXISTS"::equals).count());
             assertEquals(1, countAccounts());
         } finally {
             start.countDown();
             executor.shutdownNow();
             assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
         }
+    }
+
+    @Test void technicianCannotBeProvisionedAsFirstOwner() {
+        jdbc.update("UPDATE garage.employees SET position = 'TECHNICIAN' WHERE id = ?", employeeId);
+        assertCode(INVALID_INPUT, () -> provisioner.provision(employeeId, "first.owner", PASSWORD.toCharArray()));
+        assertEquals(0, countAccounts());
     }
 
     private String attempt(UUID employee, String username, CountDownLatch ready, CountDownLatch start) throws Exception {
@@ -180,7 +186,7 @@ class FirstAdminProvisionerTest {
         jdbc.update("""
                 INSERT INTO garage.employees
                 (id, employee_code, nic, first_name, last_name, phone, position, payment_rate, active)
-                VALUES (?, ?, ?, 'Synthetic', 'Employee', '0700000000', 'OWNER_ADMIN', 0, TRUE)
+                VALUES (?, ?, ?, 'Synthetic', 'Employee', '0700000000', 'OWNER', 0, TRUE)
                 """, id, "EMP-" + suffix, suffix);
         return id;
     }

@@ -11,7 +11,7 @@ import org.springframework.data.jpa.repository.Query;
 public interface RoleRepository extends JpaRepository<Role, Long> {
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select r from Role r where r.code = 'OWNER_ADMIN'")
+    @Query("select r from Role r where r.code = 'OWNER'")
     Optional<Role> lockOwnerRole();
 
     @EntityGraph(attributePaths = "permissions")

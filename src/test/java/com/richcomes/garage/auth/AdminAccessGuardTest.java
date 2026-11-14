@@ -21,11 +21,11 @@ class AdminAccessGuardTest {
     private final AdminAccessGuard guard = new AdminAccessGuard(roles, accounts);
 
     @Test void failsClosedWithoutOwnerRole() {
-        assertEquals(ADMIN_ROLE_NOT_CONFIGURED,
+        assertEquals(OWNER_ROLE_NOT_CONFIGURED,
                 assertThrows(AccountOperationException.class, guard::lockAdministration).getCode());
     }
     @Test void acquiresSharedRoleLock() {
-        when(roles.lockOwnerRole()).thenReturn(Optional.of(new Role("OWNER_ADMIN", "Admin")));
+        when(roles.lockOwnerRole()).thenReturn(Optional.of(new Role("OWNER", "Admin")));
         guard.lockAdministration();
         verify(roles).lockOwnerRole();
     }
@@ -38,7 +38,7 @@ class AdminAccessGuardTest {
     }
     @Test void rejectsRemovalOfLastActiveOwner() {
         when(accounts.countActiveOwners()).thenReturn(1L);
-        assertEquals(LAST_ACTIVE_ADMIN, assertThrows(AccountOperationException.class,
+        assertEquals(LAST_ACTIVE_OWNER, assertThrows(AccountOperationException.class,
                 () -> guard.protectOwner(owner())).getCode());
     }
     @Test void allowsRemovalWhenAnotherOwnerRemains() {
@@ -58,7 +58,7 @@ class AdminAccessGuardTest {
         var id = UUID.randomUUID();
         when(accounts.findByEmployee_Id(id)).thenReturn(Optional.of(owner()));
         when(accounts.countActiveOwners()).thenReturn(1L);
-        assertEquals(LAST_ACTIVE_ADMIN, assertThrows(AccountOperationException.class,
+        assertEquals(LAST_ACTIVE_OWNER, assertThrows(AccountOperationException.class,
                 () -> guard.protectEmployee(id, 99L)).getCode());
     }
     @Test void employeeDeactivationCannotDisableOwnAccount() {
@@ -67,10 +67,41 @@ class AdminAccessGuardTest {
         assertEquals(SELF_MODIFICATION, assertThrows(AccountOperationException.class,
                 () -> guard.protectEmployee(id, 7L)).getCode());
     }
+    @Test void technicianPositionChangeIsBlockedForAnyAccount() {
+        var id = UUID.randomUUID();
+        when(accounts.findByEmployee_Id(id)).thenReturn(Optional.of(owner()));
+        assertEquals(INVALID_REQUEST, assertThrows(AccountOperationException.class,
+                () -> guard.rejectTechnicianWithAccount(id)).getCode());
+    }
+
+    @Test void technicianWithoutAccountRemainsAnEmployee() {
+        assertDoesNotThrow(() -> guard.rejectTechnicianWithAccount(UUID.randomUUID()));
+    }
+
+    @Test void developerRoleIsNotAnOwner() {
+        var account = owner();
+        account.getRoles().stream().toList().forEach(account::removeRole);
+        account.assignRole(new Role("ADMIN", "Developer"));
+        guard.protectOwner(account);
+        verify(accounts, never()).countActiveOwners();
+    }
+
+    @Test void technicalAccountsCannotBeChangedThroughEmployeeEndpoints() {
+        var id = UUID.randomUUID();
+        var technical = owner();
+        technical.assignRole(new Role("ADMIN", "Developer"));
+        when(accounts.findByEmployee_Id(id)).thenReturn(Optional.of(technical));
+        assertEquals(TECHNICAL_ACCOUNT_PROTECTED, assertThrows(AccountOperationException.class,
+                () -> guard.rejectTechnicalEmployeeMutation(id)).getCode());
+        assertEquals(TECHNICAL_ACCOUNT_PROTECTED, assertThrows(AccountOperationException.class,
+                () -> guard.protectEmployee(id, 99L)).getCode());
+        verify(accounts, never()).countActiveOwners();
+    }
+
     private UserAccount owner() {
         var account = new UserAccount(new Employee(), "owner.one", "encoded-test-hash");
         ReflectionTestUtils.setField(account, "id", 7L);
-        account.assignRole(new Role("OWNER_ADMIN", "Admin"));
+        account.assignRole(new Role("OWNER", "Admin"));
         account.enable();
         return account;
     }
