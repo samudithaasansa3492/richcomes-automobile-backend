@@ -83,6 +83,40 @@ class SecurityFlowTest {
     }
 
     @Test
+    void technicianCannotLoginOrUseAnExistingToken() throws Exception {
+        employee.setPosition(com.richcomes.garage.employee.entity.EmployeePosition.TECHNICIAN);
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content(LOGIN_JSON))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void developerCannotInheritBusinessAccessEvenWithOwnerAndBusinessGrants() throws Exception {
+        var admin = new Role("ADMIN", "Developer");
+        admin.grantPermission(new Permission("account:manage", "Manage accounts"));
+        account.assignRole(admin);
+        account.assignRole(new Role("OWNER", "Owner"));
+        mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.permissions").isEmpty());
+        mvc.perform(get("/api/employees").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/accounts").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/accounts/43/roles").header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"roleCodes\":[\"OWNER\"]}"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(accountService);
+    }
+
+    @Test
+    void legacyTechnicianRoleCannotAuthenticateEvenOnCashierEmployee() throws Exception {
+        account.assignRole(new Role("TECHNICIAN", "Legacy"));
+        mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void loginIsPublicAndReturnsBearerTokenWithoutSession() throws Exception {
         var result = mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content(LOGIN_JSON))
                 .andExpect(status().isOk())
@@ -152,7 +186,7 @@ class SecurityFlowTest {
 
     @Test
     void unmappedEndpointsAndMethodsAreDeniedEvenForOwnerRole() throws Exception {
-        account.assignRole(new Role("OWNER_ADMIN", "Owner"));
+        account.assignRole(new Role("OWNER", "Owner"));
         for (String path : new String[]{"/api/customers", "/health", "/swagger-ui/index.html"}) {
             mvc.perform(get(path).header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
         }
@@ -166,7 +200,7 @@ class SecurityFlowTest {
                 .subject("42").issuedAt(JwtTokenTest.NOW).notBefore(JwtTokenTest.NOW)
                 .expiresAt(JwtTokenTest.NOW.plusSeconds(900)).id("forged-authorities")
                 .claim("permissions", java.util.List.of("employee:create"))
-                .claim("roles", java.util.List.of("OWNER_ADMIN")).build();
+                .claim("roles", java.util.List.of("OWNER")).build();
         String tokenWithClaims = encoder.encode(org.springframework.security.oauth2.jwt.JwtEncoderParameters.from(
                 org.springframework.security.oauth2.jwt.JwsHeader.with(
                         org.springframework.security.oauth2.jose.jws.SignatureAlgorithm.RS256).build(), claims))
@@ -238,11 +272,11 @@ class SecurityFlowTest {
     void managementUsesAuthenticatedActorAndSafeDomainErrors() throws Exception {
         role.grantPermission(new Permission("account:manage", "Manage accounts"));
         when(accountService.disableAccount(7L, 42L)).thenThrow(new com.richcomes.garage.auth.exception.AccountOperationException(
-                com.richcomes.garage.auth.exception.AccountOperationException.Code.LAST_ACTIVE_ADMIN,
+                com.richcomes.garage.auth.exception.AccountOperationException.Code.LAST_ACTIVE_OWNER,
                 "At least one active administrator must remain"));
         mvc.perform(patch("/api/accounts/7/disable").header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"actorId\":999}"))
-                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("LAST_ACTIVE_ADMIN"));
+                .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("LAST_ACTIVE_OWNER"));
         verify(accountService).disableAccount(7L, 42L);
         mvc.perform(put("/api/accounts/7/roles").header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"roleCodes\":[\"CASHIER\"]}"))

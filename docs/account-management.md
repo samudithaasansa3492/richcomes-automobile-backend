@@ -20,24 +20,24 @@ content, page, size, totalElements and totalPages. Collection joins are not used
 
 ## Access protection
 
-An active administrator means an enabled account attached to an active Employee with the
-OWNER_ADMIN role. Employee.position is not an authorization role.
+An active owner means an enabled account attached to an active Employee with the
+OWNER role. Employee.position is not an authorization role.
 Self-disable, self role replacement and deactivating your own linked Employee are forbidden (403).
-Removing the last active administrator through account disable, role replacement or Employee
-deactivation returns LAST_ACTIVE_ADMIN (409). Retaining OWNER_ADMIN is allowed for another account.
+Removing the last active owner through account disable, role replacement or Employee
+deactivation returns LAST_ACTIVE_OWNER (409). Retaining OWNER is allowed for another account.
 
 Enable, disable, role replacement and Employee deactivation acquire a pessimistic write lock
-on the same OWNER_ADMIN role row before loading the target. The lock is held until transaction
+on the same OWNER role row before loading the target. The lock is held until transaction
 completion, with READ_COMMITTED isolation so waiting operations see committed predecessors.
 All future access-removal paths must follow this same protocol. Direct SQL, role deletion and
 external writers do not participate in this protection. Account creation is disabled by default
-and cannot remove an existing administrator.
+and cannot remove an existing owner.
 
-The role row must exist before guarded operations; otherwise ADMIN_ROLE_NOT_CONFIGURED (503)
-is returned. Provisioning the role, permissions and first enabled administrator is a separate,
-explicitly approved operation. These endpoints do not bootstrap an administrator or seed roles.
-Only trusted administrators should receive account:create/account:manage, because role assignment
-can grant privileged access. Role permission definitions must preserve the intended administrator
+The role row must exist before guarded operations; otherwise OWNER_ROLE_NOT_CONFIGURED (503)
+is returned. Provisioning the role, permissions and first enabled owner is a separate,
+explicitly approved operation. These endpoints do not bootstrap an owner or seed roles.
+Only trusted owners should receive account:create/account:manage, because role assignment
+can grant privileged access. Role permission definitions must preserve the intended owner
 permissions. No shared Supabase migration or data change is included here.
 
 Other errors: invalid requests/unknown roles 400, missing account/employee 404, account conflicts
@@ -51,3 +51,13 @@ H2 database and real transactional row locking. It does not establish PostgreSQL
 behavior. Before rollout, repeat simultaneous disable/role-removal/Employee-deactivation checks
 against an isolated PostgreSQL database using synthetic accounts and the actual HTTP endpoints.
 Shared Supabase and production deployment require separate approval.
+
+## Developer separation and technician eligibility
+
+Only OWNER/CASHIER can be assigned by these APIs. ADMIN targets cannot be enabled,
+disabled or reassigned here. ADMIN is not a business superuser and receives no
+effective business authorities even if a business grant/OWNER role is attached.
+Technician employees cannot receive or enable accounts, replace roles, authenticate,
+or retain bearer access. Employee position changes to TECHNICIAN are rejected when
+an account exists. Account creation and employee updates also acquire the OWNER lock.
+Technical recovery endpoints are not implemented in this change; see role-model.md.

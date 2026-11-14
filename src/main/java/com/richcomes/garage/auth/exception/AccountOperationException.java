@@ -14,8 +14,9 @@ public class AccountOperationException extends RuntimeException {
         ACCOUNT_HAS_NO_ROLES,
         ACCOUNT_CONFLICT,
         SELF_MODIFICATION,
-        LAST_ACTIVE_ADMIN,
-        ADMIN_ROLE_NOT_CONFIGURED
+        TECHNICAL_ACCOUNT_PROTECTED,
+        LAST_ACTIVE_OWNER,
+        OWNER_ROLE_NOT_CONFIGURED
     }
 
     private final Code code;

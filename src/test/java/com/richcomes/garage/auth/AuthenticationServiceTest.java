@@ -38,6 +38,7 @@ class AuthenticationServiceTest {
         employee = new Employee();
         account = new UserAccount(employee, "cashier.one", "stored-hash");
         ReflectionTestUtils.setField(account, "id", 42L);
+        account.assignRole(new com.richcomes.garage.auth.entity.Role("CASHIER", "Cashier"));
         account.enable();
         when(accounts.findByUsername("cashier.one")).thenReturn(Optional.of(account));
         when(encoder.matches(request.password(), "stored-hash")).thenReturn(true);
