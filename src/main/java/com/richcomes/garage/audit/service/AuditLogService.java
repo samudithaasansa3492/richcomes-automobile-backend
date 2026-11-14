@@ -1,6 +1,5 @@
 package com.richcomes.garage.audit.service;
 
-import com.richcomes.garage.audit.dto.AuditLogCreateRequest;
 import com.richcomes.garage.audit.dto.AuditLogResponse;
 import com.richcomes.garage.audit.entity.AuditLog;
 import com.richcomes.garage.audit.repository.AuditLogRepository;
@@ -15,6 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 @Transactional
@@ -26,37 +26,57 @@ public class AuditLogService {
         this.auditLogRepository = auditLogRepository;
     }
 
-    /**
-     * Records a business or security action in the audit trail.
-     * Conforms to PDF Section 13 (Important Business Rules) and Section 14 (Finalize Job Transaction Step 9).
-     *//**
-     * Programmatic helper for cross-module service invocation.
-     */
-    public AuditLog logEvent(Long actorUserId, String action, String entityType, Long entityId,
-                             String oldValue, String newValue, String summary, String ipAddress) {
-        AuditLog log = new AuditLog();
-        if (actorUserId == null) {
-            throw new IllegalArgumentException(
-                    "Actor user ID is required"
-            );
+    /** Records an audit event from a trusted backend service. */
+    public AuditLog logEvent(Long actorUserId, String action, String entityType,
+                             Long entityId, String oldValue, String newValue,
+                             String summary, String ipAddress) {
+        requirePositiveId(actorUserId, "Actor user");
+        requirePositiveId(entityId, "Entity");
+        String normalizedAction = requireText(action, "Action", 80).toUpperCase(Locale.ROOT);
+        String normalizedEntityType = requireText(entityType, "Entity type", 80);
+        String normalizedSummary = requireText(summary, "Summary", 0);
+        if (ipAddress != null && ipAddress.length() > 50) {
+            throw new IllegalArgumentException("IP address cannot exceed 50 characters");
         }
 
+        AuditLog log = new AuditLog();
         log.setActorUserId(actorUserId);
-        log.setAction(action.trim().toUpperCase());
-        log.setEntityType(entityType.trim());
+        log.setAction(normalizedAction);
+        log.setEntityType(normalizedEntityType);
         log.setEntityId(entityId);
         log.setOldValue(oldValue);
         log.setNewValue(newValue);
-        log.setSummary(summary.trim());
+        log.setSummary(normalizedSummary);
         log.setIpAddress(ipAddress);
         log.setTimestamp(LocalDateTime.now());
         return auditLogRepository.save(log);
+    }
+
+    private void requirePositiveId(Long id, String name) {
+        if (id == null || id <= 0) {
+            throw new IllegalArgumentException(name + " ID must be positive");
+        }
+    }
+
+    private String requireText(String value, String name, int maxLength) {
+        if (value == null || value.isBlank()) {
+            throw new IllegalArgumentException(name + " is required");
+        }
+        String clean = value.trim();
+        if (maxLength > 0 && clean.length() > maxLength) {
+            throw new IllegalArgumentException(name + " cannot exceed " + maxLength + " characters");
+        }
+        return clean;
     }
 
     @Transactional(readOnly = true)
     public Page<AuditLogResponse> getAllAuditLogs(
             int page, int size) {
 
+        if (page < 0 || size < 1 || size > 100) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Page must be >= 0 and size between 1 and 100");
+        }
         Pageable pageable = PageRequest.of(
                 page,
                 size,
@@ -73,6 +93,7 @@ public class AuditLogService {
 
     @Transactional(readOnly = true)
     public AuditLogResponse getAuditLogById(Long id) {
+        requirePositiveId(id, "Audit log");
         AuditLog log = auditLogRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
@@ -83,7 +104,9 @@ public class AuditLogService {
 
     @Transactional(readOnly = true)
     public List<AuditLogResponse> getAuditLogsByEntity(String entityType, Long entityId) {
-        return auditLogRepository.findByEntityTypeAndEntityIdOrderByTimestampDesc(entityType, entityId)
+        requirePositiveId(entityId, "Entity");
+        String normalizedType = requireText(entityType, "Entity type", 80);
+        return auditLogRepository.findByEntityTypeAndEntityIdOrderByTimestampDesc(normalizedType, entityId)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
@@ -91,6 +114,7 @@ public class AuditLogService {
 
     @Transactional(readOnly = true)
     public List<AuditLogResponse> getAuditLogsByActor(Long actorUserId) {
+        requirePositiveId(actorUserId, "Actor user");
         return auditLogRepository.findByActorUserIdOrderByTimestampDesc(actorUserId)
                 .stream()
                 .map(this::mapToResponse)
@@ -99,7 +123,8 @@ public class AuditLogService {
 
     @Transactional(readOnly = true)
     public List<AuditLogResponse> getAuditLogsByAction(String action) {
-        return auditLogRepository.findByActionOrderByTimestampDesc(action.trim().toUpperCase())
+        String normalizedAction = requireText(action, "Action", 80).toUpperCase(Locale.ROOT);
+        return auditLogRepository.findByActionOrderByTimestampDesc(normalizedAction)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
@@ -107,6 +132,9 @@ public class AuditLogService {
 
     @Transactional(readOnly = true)
     public List<AuditLogResponse> getAuditLogsByDateRange(LocalDateTime start, LocalDateTime end) {
+        if (start == null || end == null || start.isAfter(end)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid date range");
+        }
         return auditLogRepository.findByTimestampBetweenOrderByTimestampDesc(start, end)
                 .stream()
                 .map(this::mapToResponse)

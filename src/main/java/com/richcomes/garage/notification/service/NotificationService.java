@@ -1,3 +1,4 @@
+
 package com.richcomes.garage.notification.service;
 
 import com.richcomes.garage.notification.dto.NotificationResponse;
@@ -6,16 +7,15 @@ import com.richcomes.garage.notification.entity.Notification;
 import com.richcomes.garage.notification.enums.NotificationChannel;
 import com.richcomes.garage.notification.enums.NotificationStatus;
 import com.richcomes.garage.notification.repository.NotificationRepository;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 
-import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -24,32 +24,74 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
 
-    public NotificationService(NotificationRepository notificationRepository) {
+    public NotificationService(
+            NotificationRepository notificationRepository) {
         this.notificationRepository = notificationRepository;
     }
 
-    /**
-     * Sends a notification across specified channel (SMS, EMAIL, SYSTEM).
-     * Tracks delivery status and timestamp.
-     */
-    public NotificationResponse sendNotification(NotificationSendRequest request) {
+    // CREATE AND QUEUE NOTIFICATION
+    // PENDING means queued, not delivered.
+    public NotificationResponse sendNotification(
+            NotificationSendRequest request) {
+
+        if (request == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Notification request is required"
+            );
+        }
+
+        if (request.getType() == null ||
+                request.getChannel() == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Notification type and channel are required"
+            );
+        }
+
+        if (request.getMessage() == null ||
+                request.getMessage().isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Notification message cannot be blank"
+            );
+        }
+
+        if (request.getMessage().length() > 5000) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Notification message cannot exceed 5000 characters"
+            );
+        }
+
+        if (request.getRecipient() == null ||
+                request.getRecipient().isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Recipient is required"
+            );
+        }
+
+        String recipient = request.getRecipient().trim();
+
+        if (recipient.length() > 150) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Recipient cannot exceed 150 characters"
+            );
+        }
+
         Notification notification = new Notification();
+
         notification.setCustomerId(request.getCustomerId());
         notification.setVehicleId(request.getVehicleId());
         notification.setAppointmentId(request.getAppointmentId());
         notification.setType(request.getType());
         notification.setChannel(request.getChannel());
-        notification.setRecipient(request.getRecipient().trim());
+        notification.setRecipient(recipient);
         notification.setMessage(request.getMessage().trim());
 
-        // Validate recipient based on channel
-
-        boolean isValid = validateRecipient(
-                request.getChannel(),
-                request.getRecipient()
-        );
-
-        if (isValid) {
+        if (validateRecipient(request.getChannel(), recipient)) {
             notification.setStatus(NotificationStatus.PENDING);
             notification.setSentAt(null);
             notification.setFailureReason(null);
@@ -62,16 +104,25 @@ public class NotificationService {
             );
         }
 
-        Notification saved = notificationRepository.save(notification);
-        return mapToResponse(saved);
+        return mapToResponse(
+                notificationRepository.save(notification)
+        );
     }
 
+    // GET ALL NOTIFICATIONS WITH FILTERS AND PAGINATION
     @Transactional(readOnly = true)
     public Page<NotificationResponse> getAllNotifications(
             NotificationStatus status,
             NotificationChannel channel,
             int page,
             int size) {
+
+        if (page < 0 || size < 1 || size > 100) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Page must be non-negative and size must be 1 to 100"
+            );
+        }
 
         Pageable pageable = PageRequest.of(page, size);
 
@@ -80,18 +131,18 @@ public class NotificationService {
         if (status != null && channel != null) {
             notifications = notificationRepository
                     .findByStatusAndChannelOrderByCreatedAtDescIdDesc(
-                            status, channel, pageable);
-
+                            status, channel, pageable
+                    );
         } else if (status != null) {
             notifications = notificationRepository
                     .findByStatusOrderByCreatedAtDescIdDesc(
-                            status, pageable);
-
+                            status, pageable
+                    );
         } else if (channel != null) {
             notifications = notificationRepository
                     .findByChannelOrderByCreatedAtDescIdDesc(
-                            channel, pageable);
-
+                            channel, pageable
+                    );
         } else {
             notifications = notificationRepository
                     .findAllByOrderByCreatedAtDescIdDesc(pageable);
@@ -100,29 +151,40 @@ public class NotificationService {
         return notifications.map(this::mapToResponse);
     }
 
+    // GET NOTIFICATION BY ID
     @Transactional(readOnly = true)
     public NotificationResponse getNotificationById(Long id) {
-        Notification notification = findNotificationById(id);
-        return mapToResponse(notification);
+        return mapToResponse(findNotificationById(id));
     }
 
+    // GET CUSTOMER NOTIFICATIONS
     @Transactional(readOnly = true)
-    public List<NotificationResponse> getNotificationsByCustomer(Long customerId) {
-        return notificationRepository.findByCustomerIdOrderByCreatedAtDesc(customerId)
+    public List<NotificationResponse> getNotificationsByCustomer(
+            Long customerId) {
+
+        return notificationRepository
+                .findByCustomerIdOrderByCreatedAtDesc(customerId)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
     }
 
+    // GET VEHICLE NOTIFICATIONS
     @Transactional(readOnly = true)
-    public List<NotificationResponse> getNotificationsByVehicle(Long vehicleId) {
-        return notificationRepository.findByVehicleIdOrderByCreatedAtDesc(vehicleId)
+    public List<NotificationResponse> getNotificationsByVehicle(
+            Long vehicleId) {
+
+        return notificationRepository
+                .findByVehicleIdOrderByCreatedAtDesc(vehicleId)
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
     }
 
+    // RETRY FAILED NOTIFICATION
+    // This requeues the record; it does not deliver the SMS.
     public NotificationResponse retryNotification(Long id) {
+
         Notification notification = findNotificationById(id);
 
         if (notification.getStatus() != NotificationStatus.FAILED) {
@@ -132,12 +194,12 @@ public class NotificationService {
             );
         }
 
-        boolean isValid = validateRecipient(
+        boolean valid = validateRecipient(
                 notification.getChannel(),
                 notification.getRecipient()
         );
 
-        if (isValid) {
+        if (valid) {
             notification.setStatus(NotificationStatus.PENDING);
             notification.setSentAt(null);
             notification.setFailureReason(null);
@@ -149,15 +211,24 @@ public class NotificationService {
             );
         }
 
-        Notification updated = notificationRepository.save(notification);
-        return mapToResponse(updated);
+        return mapToResponse(
+                notificationRepository.save(notification)
+        );
     }
 
+    // PRESERVE NOTIFICATION HISTORY
     public void deleteNotification(Long id) {
-        Notification notification = findNotificationById(id);
-        notificationRepository.delete(notification);
+
+        findNotificationById(id);
+
+        throw new ResponseStatusException(
+                HttpStatus.CONFLICT,
+                "Notification records cannot be deleted because "
+                        + "they are needed for audit and reporting"
+        );
     }
 
+    // VALIDATE RECIPIENT BASED ON CHANNEL
     private boolean validateRecipient(
             NotificationChannel channel,
             String recipient) {
@@ -171,7 +242,6 @@ public class NotificationService {
         String clean = recipient.trim();
 
         return switch (channel) {
-
             case SMS -> clean.matches(
                     "^(?:\\+94|0)7[0-9]{8}$"
             );
@@ -184,7 +254,9 @@ public class NotificationService {
         };
     }
 
+    // FIND NOTIFICATION
     private Notification findNotificationById(Long id) {
+
         return notificationRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND,
@@ -192,8 +264,12 @@ public class NotificationService {
                 ));
     }
 
-    public NotificationResponse mapToResponse(Notification notification) {
+    // ENTITY TO RESPONSE DTO
+    public NotificationResponse mapToResponse(
+            Notification notification) {
+
         NotificationResponse response = new NotificationResponse();
+
         response.setId(notification.getId());
         response.setCustomerId(notification.getCustomerId());
         response.setVehicleId(notification.getVehicleId());
@@ -206,8 +282,7 @@ public class NotificationService {
         response.setSentAt(notification.getSentAt());
         response.setFailureReason(notification.getFailureReason());
         response.setCreatedAt(notification.getCreatedAt());
+
         return response;
     }
-
-
 }

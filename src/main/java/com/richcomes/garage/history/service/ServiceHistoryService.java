@@ -1,13 +1,16 @@
-
 package com.richcomes.garage.history.service;
 
 import com.richcomes.garage.audit.service.AuditLogService;
 import com.richcomes.garage.history.dto.ServiceHistoryCreateRequest;
 import com.richcomes.garage.history.dto.ServiceHistoryResponse;
 import com.richcomes.garage.history.dto.ServiceHistoryUpdateRequest;
+//import com.richcomes.garage.history.service.VehicleCustomerResolver;
 import com.richcomes.garage.history.entity.ServiceHistory;
 import com.richcomes.garage.history.repository.ServiceHistoryRepository;
+import com.richcomes.garage.reminder.service.ServiceReminderService;
+import com.richcomes.garage.reminder.dto.GenerateReminderRequest;
 
+//import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -25,15 +28,22 @@ import java.util.Objects;
 @Transactional
 public class ServiceHistoryService {
 
+
     private final ServiceHistoryRepository serviceHistoryRepository;
     private final AuditLogService auditLogService;
+    private final ServiceReminderService serviceReminderService;
+    private final VehicleCustomerResolver vehicleCustomerResolver;
 
     public ServiceHistoryService(
             ServiceHistoryRepository serviceHistoryRepository,
-            AuditLogService auditLogService) {
+            AuditLogService auditLogService,
+            ServiceReminderService serviceReminderService,
+            VehicleCustomerResolver vehicleCustomerResolver) {
 
         this.serviceHistoryRepository = serviceHistoryRepository;
         this.auditLogService = auditLogService;
+        this.serviceReminderService = serviceReminderService;
+        this.vehicleCustomerResolver = vehicleCustomerResolver;
     }
 
     // =====================================================
@@ -109,6 +119,21 @@ public class ServiceHistoryService {
 
         ServiceHistory saved =
                 serviceHistoryRepository.save(history);
+
+        // Generate a reminder only when the service date allows a full 7-day lead.
+        // The Vehicle module supplies the customer ID via the resolver.
+        if (saved.getNextServiceDate() != null
+                && !saved.getNextServiceDate().minusDays(7).isBefore(LocalDate.now())) {
+            Long customerId = vehicleCustomerResolver.resolveCustomerId(saved.getVehicleId());
+            if (customerId == null || customerId <= 0) {
+                throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
+                        "No customer is associated with this vehicle");
+            }
+            GenerateReminderRequest reminderRequest = new GenerateReminderRequest();
+            reminderRequest.setServiceHistoryId(saved.getId());
+            reminderRequest.setCustomerId(customerId);
+            serviceReminderService.generateFromServiceHistory(reminderRequest);
+        }
 
         return mapToResponse(saved);
     }
