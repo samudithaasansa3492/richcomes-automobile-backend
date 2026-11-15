@@ -3,6 +3,7 @@ package com.richcomes.garage.inventory.stockitem.entity;
 
 import com.richcomes.garage.inventory.category.entity.StockCategory;
 import jakarta.persistence.*;
+
 import java.math.BigDecimal;
 
 @Entity
@@ -32,11 +33,18 @@ public class StockItem {
     @Column(length = 500)
     private String imageUrl;
 
-    @Column(nullable = false)
-    private Integer currentQuantity = 0;
+    // Measurement unit: PCS, L, ML
+    // Default PCS keeps existing whole-item products compatible.
+    @Column(name = "unit", nullable = false, length = 10)
+    private String unit = "PCS";
 
-    @Column(nullable = false)
-    private Integer reorderLevel = 10;
+    // Decimal stock quantity support
+    @Column(nullable = false, precision = 14, scale = 3)
+    private BigDecimal currentQuantity = BigDecimal.ZERO;
+
+    // Decimal reorder level support
+    @Column(nullable = false, precision = 14, scale = 3)
+    private BigDecimal reorderLevel = BigDecimal.TEN;
 
     @Column(nullable = false, precision = 12, scale = 2)
     private BigDecimal unitCost = BigDecimal.ZERO;
@@ -109,19 +117,27 @@ public class StockItem {
         this.imageUrl = imageUrl;
     }
 
-    public Integer getCurrentQuantity() {
+    public String getUnit() {
+        return unit;
+    }
+
+    public void setUnit(String unit) {
+        this.unit = unit;
+    }
+
+    public BigDecimal getCurrentQuantity() {
         return currentQuantity;
     }
 
-    public void setCurrentQuantity(Integer currentQuantity) {
+    public void setCurrentQuantity(BigDecimal currentQuantity) {
         this.currentQuantity = currentQuantity;
     }
 
-    public Integer getReorderLevel() {
+    public BigDecimal getReorderLevel() {
         return reorderLevel;
     }
 
-    public void setReorderLevel(Integer reorderLevel) {
+    public void setReorderLevel(BigDecimal reorderLevel) {
         this.reorderLevel = reorderLevel;
     }
 

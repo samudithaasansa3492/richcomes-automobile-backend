@@ -1,7 +1,9 @@
 
 package com.richcomes.garage.inventory.stockmovement.dto.response;
-import com.richcomes.garage.inventory.stockmovement.dto.response.StockMovementResponse;
+
 import com.richcomes.garage.inventory.stockmovement.enums.StockTransactionType;
+
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 public class StockMovementResponse {
@@ -12,9 +14,11 @@ public class StockMovementResponse {
     private String itemName;
 
     private StockTransactionType transactionType;
-    private Integer quantity;
-    private Integer quantityBefore;
-    private Integer quantityAfter;
+
+    // Decimal quantity support
+    private BigDecimal quantity;
+    private BigDecimal quantityBefore;
+    private BigDecimal quantityAfter;
 
     private String referenceType;
     private Long referenceId;
@@ -66,27 +70,27 @@ public class StockMovementResponse {
         this.transactionType = transactionType;
     }
 
-    public Integer getQuantity() {
+    public BigDecimal getQuantity() {
         return quantity;
     }
 
-    public void setQuantity(Integer quantity) {
+    public void setQuantity(BigDecimal quantity) {
         this.quantity = quantity;
     }
 
-    public Integer getQuantityBefore() {
+    public BigDecimal getQuantityBefore() {
         return quantityBefore;
     }
 
-    public void setQuantityBefore(Integer quantityBefore) {
+    public void setQuantityBefore(BigDecimal quantityBefore) {
         this.quantityBefore = quantityBefore;
     }
 
-    public Integer getQuantityAfter() {
+    public BigDecimal getQuantityAfter() {
         return quantityAfter;
     }
 
-    public void setQuantityAfter(Integer quantityAfter) {
+    public void setQuantityAfter(BigDecimal quantityAfter) {
         this.quantityAfter = quantityAfter;
     }
 

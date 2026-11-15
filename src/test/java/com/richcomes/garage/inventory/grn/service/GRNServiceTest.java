@@ -1,6 +1,8 @@
 
 package com.richcomes.garage.inventory.grn.service;
 
+import com.richcomes.garage.inventory.grn.dto.request.GRNItemRequest;
+import com.richcomes.garage.inventory.grn.dto.request.GRNRequest;
 import com.richcomes.garage.inventory.grn.entity.GRN;
 import com.richcomes.garage.inventory.grn.entity.GRNItem;
 import com.richcomes.garage.inventory.grn.enums.GRNStatus;
@@ -12,9 +14,7 @@ import com.richcomes.garage.inventory.stockmovement.enums.StockTransactionType;
 import com.richcomes.garage.inventory.stockmovement.repository.StockTransactionRepository;
 import com.richcomes.garage.inventory.supplier.entity.Supplier;
 import com.richcomes.garage.inventory.supplier.repository.SupplierRepository;
-import com.richcomes.garage.inventory.grn.dto.request.GRNRequest;
-import com.richcomes.garage.inventory.grn.dto.request.GRNItemRequest;
-import java.util.List;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -27,6 +27,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -65,12 +66,12 @@ class GRNServiceTest {
         stockItem.setId(1L);
         stockItem.setItemCode("OIL-001");
         stockItem.setItemName("Engine Oil 1L");
-        stockItem.setCurrentQuantity(0);
+        stockItem.setCurrentQuantity(BigDecimal.ZERO);
         stockItem.setActive(true);
 
         GRNItem grnItem = new GRNItem();
         grnItem.setStockItem(stockItem);
-        grnItem.setReceivedQuantity(20);
+        grnItem.setReceivedQuantity(new BigDecimal("20.000"));
         grnItem.setUnitCost(new BigDecimal("1500.00"));
 
         grn = new GRN();
@@ -95,7 +96,13 @@ class GRNServiceTest {
         grnService.confirmGRN(1L);
 
         assertEquals(GRNStatus.CONFIRMED, grn.getStatus());
-        assertEquals(20, stockItem.getCurrentQuantity());
+
+        assertEquals(
+                0,
+                new BigDecimal("20.000")
+                        .compareTo(stockItem.getCurrentQuantity())
+        );
+
         assertNotNull(grn.getReceivedAt());
 
         ArgumentCaptor<StockTransaction> captor =
@@ -110,9 +117,25 @@ class GRNServiceTest {
                 transaction.getTransactionType()
         );
 
-        assertEquals(20, transaction.getQuantity());
-        assertEquals(0, transaction.getQuantityBefore());
-        assertEquals(20, transaction.getQuantityAfter());
+        assertEquals(
+                0,
+                new BigDecimal("20.000")
+                        .compareTo(transaction.getQuantity())
+        );
+
+        assertEquals(
+                0,
+                BigDecimal.ZERO.compareTo(
+                        transaction.getQuantityBefore()
+                )
+        );
+
+        assertEquals(
+                0,
+                new BigDecimal("20.000")
+                        .compareTo(transaction.getQuantityAfter())
+        );
+
         assertEquals("GRN", transaction.getReferenceType());
 
         verify(grnRepository).saveAndFlush(grn);
@@ -132,6 +155,7 @@ class GRNServiceTest {
         );
 
         verifyNoInteractions(transactionRepository);
+
         verify(stockItemRepository, never()).save(any());
     }
 
@@ -147,9 +171,16 @@ class GRNServiceTest {
         grnService.cancelGRN(1L);
 
         assertEquals(GRNStatus.CANCELLED, grn.getStatus());
-        assertEquals(0, stockItem.getCurrentQuantity());
+
+        assertEquals(
+                0,
+                BigDecimal.ZERO.compareTo(
+                        stockItem.getCurrentQuantity()
+                )
+        );
 
         verifyNoInteractions(transactionRepository);
+
         verify(stockItemRepository, never()).save(any());
     }
 
@@ -166,7 +197,9 @@ class GRNServiceTest {
                 () -> grnService.cancelGRN(1L)
         );
 
-        verify(grnRepository, never()).saveAndFlush(any(GRN.class));
+        verify(grnRepository, never())
+                .saveAndFlush(any(GRN.class));
+
         verifyNoInteractions(transactionRepository);
     }
 
@@ -192,7 +225,6 @@ class GRNServiceTest {
     @Test
     void confirmEmptyGRN_ShouldReject() {
 
-        // An empty GRN with DRAFT status
         GRN emptyGRN = new GRN();
         emptyGRN.setStatus(GRNStatus.DRAFT);
 
@@ -227,7 +259,12 @@ class GRNServiceTest {
 
         assertEquals(409, exception.getStatusCode().value());
 
-        assertEquals(0, stockItem.getCurrentQuantity());
+        assertEquals(
+                0,
+                BigDecimal.ZERO.compareTo(
+                        stockItem.getCurrentQuantity()
+                )
+        );
 
         verifyNoInteractions(
                 stockItemRepository,
@@ -282,12 +319,12 @@ class GRNServiceTest {
 
         GRNItemRequest firstItem = new GRNItemRequest();
         firstItem.setStockItemId(1L);
-        firstItem.setReceivedQuantity(10);
+        firstItem.setReceivedQuantity(new BigDecimal("10.000"));
         firstItem.setUnitCost(new BigDecimal("1500.00"));
 
         GRNItemRequest secondItem = new GRNItemRequest();
         secondItem.setStockItemId(1L);
-        secondItem.setReceivedQuantity(5);
+        secondItem.setReceivedQuantity(new BigDecimal("5.000"));
         secondItem.setUnitCost(new BigDecimal("1500.00"));
 
         request.setItems(List.of(firstItem, secondItem));
@@ -305,7 +342,8 @@ class GRNServiceTest {
 
         assertEquals(400, exception.getStatusCode().value());
 
-        verify(grnRepository, never()).saveAndFlush(any(GRN.class));
+        verify(grnRepository, never())
+                .saveAndFlush(any(GRN.class));
     }
 
     @Test
@@ -316,7 +354,7 @@ class GRNServiceTest {
 
         GRNItemRequest itemRequest = new GRNItemRequest();
         itemRequest.setStockItemId(1L);
-        itemRequest.setReceivedQuantity(0);
+        itemRequest.setReceivedQuantity(BigDecimal.ZERO);
         itemRequest.setUnitCost(new BigDecimal("1500.00"));
 
         request.setItems(List.of(itemRequest));
@@ -332,7 +370,9 @@ class GRNServiceTest {
         assertEquals(400, exception.getStatusCode().value());
 
         verify(stockItemRepository, never()).findById(any());
-        verify(grnRepository, never()).saveAndFlush(any(GRN.class));
+
+        verify(grnRepository, never())
+                .saveAndFlush(any(GRN.class));
     }
 
     @Test
@@ -343,7 +383,7 @@ class GRNServiceTest {
 
         GRNItemRequest itemRequest = new GRNItemRequest();
         itemRequest.setStockItemId(1L);
-        itemRequest.setReceivedQuantity(5);
+        itemRequest.setReceivedQuantity(new BigDecimal("5.000"));
         itemRequest.setUnitCost(new BigDecimal("1500.00"));
 
         request.setItems(List.of(itemRequest));
@@ -362,9 +402,63 @@ class GRNServiceTest {
         assertEquals(400, exception.getStatusCode().value());
 
         verifyNoInteractions(stockItemRepository);
-        verify(grnRepository, never()).saveAndFlush(any(GRN.class));
+
+        verify(grnRepository, never())
+                .saveAndFlush(any(GRN.class));
     }
 
+    @Test
+    void confirmDecimalGRN_ShouldIncreaseStockPrecisely() {
 
+        stockItem.setUnit("L");
 
+        stockItem.setCurrentQuantity(new BigDecimal("10.500"));
+
+        GRNItem grnItem = grn.getItems().get(0);
+        grnItem.setReceivedQuantity(new BigDecimal("1.250"));
+
+        when(grnRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(grn));
+
+        when(stockItemRepository.findByIdForUpdate(1L))
+                .thenReturn(Optional.of(stockItem));
+
+        when(grnRepository.saveAndFlush(any(GRN.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        grnService.confirmGRN(1L);
+
+        assertEquals(
+                0,
+                new BigDecimal("11.750")
+                        .compareTo(stockItem.getCurrentQuantity())
+        );
+
+        ArgumentCaptor<StockTransaction> captor =
+                ArgumentCaptor.forClass(StockTransaction.class);
+
+        verify(transactionRepository).save(captor.capture());
+
+        StockTransaction transaction = captor.getValue();
+
+        assertEquals(
+                0,
+                new BigDecimal("1.250")
+                        .compareTo(transaction.getQuantity())
+        );
+
+        assertEquals(
+                0,
+                new BigDecimal("10.500")
+                        .compareTo(transaction.getQuantityBefore())
+        );
+
+        assertEquals(
+                0,
+                new BigDecimal("11.750")
+                        .compareTo(transaction.getQuantityAfter())
+        );
+
+        assertEquals(GRNStatus.CONFIRMED, grn.getStatus());
+    }
 }

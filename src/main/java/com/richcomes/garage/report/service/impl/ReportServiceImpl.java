@@ -148,47 +148,47 @@ public class ReportServiceImpl implements ReportService {
     }
 
     @Override
-    
-public DashboardReportResponse getDashboardReport(
-        ReportPeriod period,
-        LocalDate referenceDate,
-        LocalDate startDate,
-        LocalDate endDate
-) {
-    ReportPeriod effectivePeriod =
-            period != null ? period : ReportPeriod.MONTHLY;
 
-    ReportDateRangeResolver.DateWindow window =
-            dateRangeResolver.resolve(
-                    effectivePeriod,
-                    referenceDate,
-                    startDate,
-                    endDate
-            );
+    public DashboardReportResponse getDashboardReport(
+            ReportPeriod period,
+            LocalDate referenceDate,
+            LocalDate startDate,
+            LocalDate endDate
+    ) {
+        ReportPeriod effectivePeriod =
+                period != null ? period : ReportPeriod.MONTHLY;
 
-    OperationalReportResponse operational =
-            buildOperationalReport(effectivePeriod, window);
+        ReportDateRangeResolver.DateWindow window =
+                dateRangeResolver.resolve(
+                        effectivePeriod,
+                        referenceDate,
+                        startDate,
+                        endDate
+                );
 
-    StockReportResponse stock =
-            buildStockReport(effectivePeriod, window);
+        OperationalReportResponse operational =
+                buildOperationalReport(effectivePeriod, window);
 
-    FinancialReportResponse financial =
-            buildFinancialReport(effectivePeriod, window);
+        StockReportResponse stock =
+                buildStockReport(effectivePeriod, window);
 
-    PerformanceReportResponse performance =
-            buildPerformanceReport(
-                    effectivePeriod, window, null, null
-            );
+        FinancialReportResponse financial =
+                buildFinancialReport(effectivePeriod, window);
 
-    return assembleDashboard(
-            effectivePeriod,
-            window,
-            operational,
-            stock,
-            financial,
-            performance
-    );
-}
+        PerformanceReportResponse performance =
+                buildPerformanceReport(
+                        effectivePeriod, window, null, null
+                );
+
+        return assembleDashboard(
+                effectivePeriod,
+                window,
+                operational,
+                stock,
+                financial,
+                performance
+        );
+    }
 
     @Override
     public OperationalReportResponse getOperationalReport(
@@ -245,166 +245,166 @@ public DashboardReportResponse getDashboardReport(
     }
 
     @Override
-public ComprehensiveReportResponse getComprehensiveReport(
-        ReportPeriod period,
-        LocalDate referenceDate,
-        LocalDate startDate,
-        LocalDate endDate
-) {
-    ReportPeriod effectivePeriod =
-            period != null ? period : ReportPeriod.MONTHLY;
+    public ComprehensiveReportResponse getComprehensiveReport(
+            ReportPeriod period,
+            LocalDate referenceDate,
+            LocalDate startDate,
+            LocalDate endDate
+    ) {
+        ReportPeriod effectivePeriod =
+                period != null ? period : ReportPeriod.MONTHLY;
 
-    ReportDateRangeResolver.DateWindow window =
-            dateRangeResolver.resolve(
-                    effectivePeriod,
-                    referenceDate,
-                    startDate,
-                    endDate
-            );
+        ReportDateRangeResolver.DateWindow window =
+                dateRangeResolver.resolve(
+                        effectivePeriod,
+                        referenceDate,
+                        startDate,
+                        endDate
+                );
 
-    OperationalReportResponse operational =
-            buildOperationalReport(effectivePeriod, window);
+        OperationalReportResponse operational =
+                buildOperationalReport(effectivePeriod, window);
 
-    StockReportResponse stock =
-            buildStockReport(effectivePeriod, window);
+        StockReportResponse stock =
+                buildStockReport(effectivePeriod, window);
 
-    FinancialReportResponse financial =
-            buildFinancialReport(effectivePeriod, window);
+        FinancialReportResponse financial =
+                buildFinancialReport(effectivePeriod, window);
 
-    PerformanceReportResponse performance =
-            buildPerformanceReport(
-                    effectivePeriod, window, null, null
-            );
+        PerformanceReportResponse performance =
+                buildPerformanceReport(
+                        effectivePeriod, window, null, null
+                );
 
-    ComprehensiveReportResponse response =
-            new ComprehensiveReportResponse();
+        ComprehensiveReportResponse response =
+                new ComprehensiveReportResponse();
 
-    response.setMetadata(
-            createMetadata(
-                    ReportType.COMPREHENSIVE,
-                    effectivePeriod,
-                    window
-            )
-    );
+        response.setMetadata(
+                createMetadata(
+                        ReportType.COMPREHENSIVE,
+                        effectivePeriod,
+                        window
+                )
+        );
 
-    response.setOperational(operational);
-    response.setStock(stock);
-    response.setFinancial(financial);
-    response.setPerformance(performance);
+        response.setOperational(operational);
+        response.setStock(stock);
+        response.setFinancial(financial);
+        response.setPerformance(performance);
 
-    response.setDashboard(
-            assembleDashboard(
-                    effectivePeriod,
-                    window,
-                    operational,
-                    stock,
-                    financial,
-                    performance
-            )
-    );
+        response.setDashboard(
+                assembleDashboard(
+                        effectivePeriod,
+                        window,
+                        operational,
+                        stock,
+                        financial,
+                        performance
+                )
+        );
 
-    return response;
-}
+        return response;
+    }
 
-        private DashboardReportResponse assembleDashboard(
-        ReportPeriod period,
-        ReportDateRangeResolver.DateWindow window,
-        OperationalReportResponse operational,
-        StockReportResponse stock,
-        FinancialReportResponse financial,
-        PerformanceReportResponse performance
-) {
-    List<NotificationResponse> notificationsInWindow =
-            fetchNotificationsInRange(
-                    window.startDate(),
-                    window.endDate()
-            );
+    private DashboardReportResponse assembleDashboard(
+            ReportPeriod period,
+            ReportDateRangeResolver.DateWindow window,
+            OperationalReportResponse operational,
+            StockReportResponse stock,
+            FinancialReportResponse financial,
+            PerformanceReportResponse performance
+    ) {
+        List<NotificationResponse> notificationsInWindow =
+                fetchNotificationsInRange(
+                        window.startDate(),
+                        window.endDate()
+                );
 
-    DashboardReportResponse dashboard =
-            new DashboardReportResponse();
+        DashboardReportResponse dashboard =
+                new DashboardReportResponse();
 
-    dashboard.setMetadata(
-            createMetadata(
-                    ReportType.COMPREHENSIVE,
-                    period,
-                    window
-            )
-    );
+        dashboard.setMetadata(
+                createMetadata(
+                        ReportType.COMPREHENSIVE,
+                        period,
+                        window
+                )
+        );
 
-    dashboard.setTotalRevenue(
-            financial.getRecordedServiceRevenue());
+        dashboard.setTotalRevenue(
+                financial.getRecordedServiceRevenue());
 
-    dashboard.setTotalProcurementSpend(
-            financial.getConfirmedGrnProcurementSpend());
+        dashboard.setTotalProcurementSpend(
+                financial.getConfirmedGrnProcurementSpend());
 
-    dashboard.setNetOperatingEstimate(
-            financial.getNetOperatingCashEstimate());
+        dashboard.setNetOperatingEstimate(
+                financial.getNetOperatingCashEstimate());
 
-    dashboard.setInventoryValuation(
-            stock.getTotalInventoryCostValue());
+        dashboard.setInventoryValuation(
+                stock.getTotalInventoryCostValue());
 
-    dashboard.setTotalJobs(
-            operational.getTotalJobs());
+        dashboard.setTotalJobs(
+                operational.getTotalJobs());
 
-    dashboard.setCompletedJobs(
-            operational.getCompletedJobs()
-                    + operational.getClosedJobs());
+        dashboard.setCompletedJobs(
+                operational.getCompletedJobs()
+                        + operational.getClosedJobs());
 
-    dashboard.setJobCompletionRate(
-            operational.getJobCompletionRate());
+        dashboard.setJobCompletionRate(
+                operational.getJobCompletionRate());
 
-    dashboard.setTotalAppointments(
-            operational.getTotalAppointments());
+        dashboard.setTotalAppointments(
+                operational.getTotalAppointments());
 
-    dashboard.setPendingAppointments(
-            operational.getPendingAppointments());
+        dashboard.setPendingAppointments(
+                operational.getPendingAppointments());
 
-    dashboard.setActiveCustomers(
-            operational.getActiveCustomers());
+        dashboard.setActiveCustomers(
+                operational.getActiveCustomers());
 
-    dashboard.setActiveVehicles(
-            operational.getActiveVehicles());
+        dashboard.setActiveVehicles(
+                operational.getActiveVehicles());
 
-    dashboard.setLowStockAlerts(
-            stock.getLowStockCount());
+        dashboard.setLowStockAlerts(
+                stock.getLowStockCount());
 
-    dashboard.setDueReminders(
-            operational.getDueRemindersCount());
+        dashboard.setDueReminders(
+                operational.getDueRemindersCount());
 
-    dashboard.setFailedNotifications(
-            operational.getFailedNotificationsInPeriod());
+        dashboard.setFailedNotifications(
+                operational.getFailedNotificationsInPeriod());
 
-    dashboard.setRevenueAndOperationsTrend(
-            financial.getFinancialTrend());
+        dashboard.setRevenueAndOperationsTrend(
+                financial.getFinancialTrend());
 
-    dashboard.setJobStatusBreakdown(
-            operational.getJobStatusDistribution());
+        dashboard.setJobStatusBreakdown(
+                operational.getJobStatusDistribution());
 
-    dashboard.setAppointmentStatusBreakdown(
-            operational.getAppointmentStatusDistribution());
+        dashboard.setAppointmentStatusBreakdown(
+                operational.getAppointmentStatusDistribution());
 
-    dashboard.setRevenueComposition(
-            financial.getRevenueComposition());
+        dashboard.setRevenueComposition(
+                financial.getRevenueComposition());
 
-    dashboard.setStockValueByCategory(
-            buildCategoryValuationSegments(
-                    stock.getCategoryBreakdown()
-            )
-    );
+        dashboard.setStockValueByCategory(
+                buildCategoryValuationSegments(
+                        stock.getCategoryBreakdown()
+                )
+        );
 
-    dashboard.setNotificationStatusDistribution(
-        buildNotificationSegments(notificationsInWindow)
-);
+        dashboard.setNotificationStatusDistribution(
+                buildNotificationSegments(notificationsInWindow)
+        );
 
-    dashboard.setTopTechnicians(
-            performance.getTechnicianPerformances()
-                    .stream()
-                    .limit(5)
-                    .toList()
-    );
+        dashboard.setTopTechnicians(
+                performance.getTechnicianPerformances()
+                        .stream()
+                        .limit(5)
+                        .toList()
+        );
 
-    return dashboard;
-}
+        return dashboard;
+    }
 
     // =====================================================
     // OPERATIONAL REPORT BUILDER
@@ -532,17 +532,17 @@ public ComprehensiveReportResponse getComprehensiveReport(
         List<SupplierResponse> suppliers = supplierService.getAllSuppliers();
 
         long activeItems = allItems.stream().filter(StockItemResponse::isActive).count();
-        long totalUnits = allItems.stream()
-                .mapToLong(i -> i.getCurrentQuantity() != null ? i.getCurrentQuantity() : 0)
-                .sum();
+        // Preserve decimal quantities throughout the stock report.
+        BigDecimal totalUnits = allItems.stream()
+                .map(i -> safeAmount(i.getCurrentQuantity()))
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal totalCostVal = BigDecimal.ZERO;
         BigDecimal totalSellVal = BigDecimal.ZERO;
 
         Map<Long, List<StockItemResponse>> itemsByCategory = new LinkedHashMap<>();
         for (StockItemResponse item : allItems) {
-            int qty = item.getCurrentQuantity() != null ? item.getCurrentQuantity() : 0;
-            BigDecimal qtyBd = BigDecimal.valueOf(qty);
+            BigDecimal qtyBd = safeAmount(item.getCurrentQuantity());
             BigDecimal unitCost = safeAmount(item.getUnitCost());
             BigDecimal sellPrice = safeAmount(item.getSellingPrice());
 
@@ -560,15 +560,15 @@ public ComprehensiveReportResponse getComprehensiveReport(
             String catName = catItems.get(0).getCategoryName() != null
                     ? catItems.get(0).getCategoryName()
                     : "Uncategorized";
-            long catQty = 0;
+            BigDecimal catQty = BigDecimal.ZERO;
             BigDecimal catCost = BigDecimal.ZERO;
             BigDecimal catSell = BigDecimal.ZERO;
 
             for (StockItemResponse item : catItems) {
-                int qty = item.getCurrentQuantity() != null ? item.getCurrentQuantity() : 0;
-                catQty += qty;
-                catCost = catCost.add(safeAmount(item.getUnitCost()).multiply(BigDecimal.valueOf(qty)));
-                catSell = catSell.add(safeAmount(item.getSellingPrice()).multiply(BigDecimal.valueOf(qty)));
+                BigDecimal qty = safeAmount(item.getCurrentQuantity());
+                catQty = catQty.add(qty);
+                catCost = catCost.add(safeAmount(item.getUnitCost()).multiply(qty));
+                catSell = catSell.add(safeAmount(item.getSellingPrice()).multiply(qty));
             }
 
             categoryBreakdown.add(new StockReportResponse.CategoryStockSummary(
@@ -588,12 +588,12 @@ public ComprehensiveReportResponse getComprehensiveReport(
                         && isInDateRange(m.getCreatedAt().toLocalDate(), window))
                 .toList();
 
-        Map<StockTransactionType, Long> movementQtyByType = new EnumMap<>(StockTransactionType.class);
+        Map<StockTransactionType, BigDecimal> movementQtyByType = new EnumMap<>(StockTransactionType.class);
         Map<StockTransactionType, Long> movementCountByType = new EnumMap<>(StockTransactionType.class);
         for (StockMovementResponse movement : movementsInPeriod) {
             if (movement.getTransactionType() != null) {
-                long qty = movement.getQuantity() != null ? movement.getQuantity() : 0L;
-                movementQtyByType.merge(movement.getTransactionType(), qty, Long::sum);
+                BigDecimal qty = safeAmount(movement.getQuantity());
+                movementQtyByType.merge(movement.getTransactionType(), qty, BigDecimal::add);
                 movementCountByType.merge(movement.getTransactionType(), 1L, Long::sum);
             }
         }
@@ -633,30 +633,32 @@ public ComprehensiveReportResponse getComprehensiveReport(
 
         List<StockReportResponse.LowStockItemAlert> alerts = lowStockItems.stream()
                 .map(item -> {
-                    int current = item.getCurrentQuantity() != null ? item.getCurrentQuantity() : 0;
-                    int reorder = item.getReorderLevel() != null ? item.getReorderLevel() : 0;
+                    BigDecimal currentQty = safeAmount(item.getCurrentQuantity());
+                    BigDecimal reorderQty = safeAmount(item.getReorderLevel());
+                    BigDecimal deficit = reorderQty.subtract(currentQty)
+                            .max(BigDecimal.ZERO);
                     return new StockReportResponse.LowStockItemAlert(
                             item.getId(),
                             item.getItemCode(),
                             item.getItemName(),
                             item.getCategoryName(),
-                            current,
-                            reorder,
-                            Math.max(0, reorder - current),
+                            currentQty,
+                            reorderQty,
+                            deficit,
                             scale2(safeAmount(item.getUnitCost()))
                     );
                 })
-                .sorted(Comparator.comparingInt(StockReportResponse.LowStockItemAlert::getDeficit).reversed())
+                .sorted(Comparator.comparing(StockReportResponse.LowStockItemAlert::getDeficit).reversed())
                 .toList();
 
         List<ChartSeriesDTO.ChartSegment> movementSegments = new ArrayList<>();
         for (StockTransactionType type : StockTransactionType.values()) {
             long count = movementCountByType.getOrDefault(type, 0L);
-            long qty = movementQtyByType.getOrDefault(type, 0L);
+            BigDecimal qty = movementQtyByType.getOrDefault(type, BigDecimal.ZERO);
             movementSegments.add(new ChartSeriesDTO.ChartSegment(
                     type.name(),
                     count,
-                    BigDecimal.valueOf(qty),
+                    qty,
                     percentage(count, movementsInPeriod.size())
             ));
         }
@@ -673,12 +675,12 @@ public ComprehensiveReportResponse getComprehensiveReport(
         response.setPotentialGrossProfit(scale2(totalSellVal.subtract(totalCostVal)));
 
         response.setTotalMovementsInPeriod(movementsInPeriod.size());
-        response.setStockInQuantity(movementQtyByType.getOrDefault(StockTransactionType.STOCK_IN, 0L));
-        response.setStockOutQuantity(movementQtyByType.getOrDefault(StockTransactionType.STOCK_OUT, 0L));
-        response.setDamageQuantity(movementQtyByType.getOrDefault(StockTransactionType.DAMAGE, 0L));
-        response.setWastageQuantity(movementQtyByType.getOrDefault(StockTransactionType.WASTAGE, 0L));
-        response.setAdjustmentInQuantity(movementQtyByType.getOrDefault(StockTransactionType.ADJUSTMENT_IN, 0L));
-        response.setAdjustmentOutQuantity(movementQtyByType.getOrDefault(StockTransactionType.ADJUSTMENT_OUT, 0L));
+        response.setStockInQuantity(movementQtyByType.getOrDefault(StockTransactionType.STOCK_IN, BigDecimal.ZERO));
+        response.setStockOutQuantity(movementQtyByType.getOrDefault(StockTransactionType.STOCK_OUT, BigDecimal.ZERO));
+        response.setDamageQuantity(movementQtyByType.getOrDefault(StockTransactionType.DAMAGE, BigDecimal.ZERO));
+        response.setWastageQuantity(movementQtyByType.getOrDefault(StockTransactionType.WASTAGE, BigDecimal.ZERO));
+        response.setAdjustmentInQuantity(movementQtyByType.getOrDefault(StockTransactionType.ADJUSTMENT_IN, BigDecimal.ZERO));
+        response.setAdjustmentOutQuantity(movementQtyByType.getOrDefault(StockTransactionType.ADJUSTMENT_OUT, BigDecimal.ZERO));
 
         response.setTotalSuppliers(suppliers.size());
         response.setActiveSuppliers(suppliers.stream().filter(SupplierResponse::isActive).count());
@@ -770,14 +772,14 @@ public ComprehensiveReportResponse getComprehensiveReport(
                 .map(e -> safeAmount(e.paymentRate()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        
-                BigDecimal billableTotal = labourRevenue.add(partsRevenue);
 
-                // Estimated operating difference, not actual cash flow.
-                BigDecimal estimatedRevenue = recordedRevenue;
+        BigDecimal billableTotal = labourRevenue.add(partsRevenue);
 
-                BigDecimal netCashEstimate =
-                        estimatedRevenue.subtract(confirmedGrnSpend);
+        // Estimated operating difference, not actual cash flow.
+        BigDecimal estimatedRevenue = recordedRevenue;
+
+        BigDecimal netCashEstimate =
+                estimatedRevenue.subtract(confirmedGrnSpend);
 
         List<ChartSeriesDTO.TimeSeriesPoint> trend = buildTimeSeriesTrend(
                 period,
@@ -817,14 +819,14 @@ public ComprehensiveReportResponse getComprehensiveReport(
         response.setTotalCustomerCreditLimitPool(scale2(totalCreditPool));
         response.setActiveEmployeeCount(activeEmployees.size());
         response.setActiveStaffDailyRateTotal(scale2(activeStaffDailyRate));
-        
+
         response.setBillingIntegrationNote(
-        "Estimated operating difference = recorded service revenue "
-        + "minus confirmed GRN procurement value. "
-        + "This is not actual cash flow or net profit. "
-        + "Job billable totals are shown separately and are not "
-        + "added to recorded service revenue to avoid double counting. "
-        + "Actual cash reporting requires payment and cash ledger data."
+                "Estimated operating difference = recorded service revenue "
+                        + "minus confirmed GRN procurement value. "
+                        + "This is not actual cash flow or net profit. "
+                        + "Job billable totals are shown separately and are not "
+                        + "added to recorded service revenue to avoid double counting. "
+                        + "Actual cash reporting requires payment and cash ledger data."
         );
 
         response.setFinancialTrend(trend);
@@ -905,42 +907,42 @@ public ComprehensiveReportResponse getComprehensiveReport(
 
         // Accumulate completion durations per technician
         // Accumulate completion durations per technician
-Map<Long, List<Double>> completionHoursByTech = new HashMap<>();
+        Map<Long, List<Double>> completionHoursByTech = new HashMap<>();
 
-for (ServiceJobDTO job : jobsInPeriod) {
+        for (ServiceJobDTO job : jobsInPeriod) {
 
-    Long techId = job.getAssignedEmployeeId();
-    String status = job.getStatus();
+            Long techId = job.getAssignedEmployeeId();
+            String status = job.getStatus();
 
-    if (techId == null) {
-        continue;
-    }
+            if (techId == null) {
+                continue;
+            }
 
-    if (technicianIdFilter != null
-            && !technicianIdFilter.equals(techId)) {
-        continue;
-    }
+            if (technicianIdFilter != null
+                    && !technicianIdFilter.equals(techId)) {
+                continue;
+            }
 
-    boolean completed = "COMPLETED".equalsIgnoreCase(status)
-            || "CLOSED".equalsIgnoreCase(status);
+            boolean completed = "COMPLETED".equalsIgnoreCase(status)
+                    || "CLOSED".equalsIgnoreCase(status);
 
-    if (!completed
-            || job.getJobDate() == null
-            || job.getActualCompletionDate() == null
-            || job.getActualCompletionDate()
+            if (!completed
+                    || job.getJobDate() == null
+                    || job.getActualCompletionDate() == null
+                    || job.getActualCompletionDate()
                     .isBefore(job.getJobDate())) {
-        continue;
-    }
+                continue;
+            }
 
-    double hours = Duration.between(
-            job.getJobDate(),
-            job.getActualCompletionDate()
-    ).toMinutes() / 60.0;
+            double hours = Duration.between(
+                    job.getJobDate(),
+                    job.getActualCompletionDate()
+            ).toMinutes() / 60.0;
 
-    completionHoursByTech
-            .computeIfAbsent(techId, k -> new ArrayList<>())
-            .add(hours);
-}
+            completionHoursByTech
+                    .computeIfAbsent(techId, k -> new ArrayList<>())
+                    .add(hours);
+        }
 
         for (ServiceHistoryResponse history : historiesInPeriod) {
             Long techId = history.getTechnicianId();
@@ -992,36 +994,36 @@ for (ServiceJobDTO job : jobsInPeriod) {
         // System user audit log performance
         // System user audit log performance
         Map<Long, List<AuditLogResponse>> logsByActor =
-        auditLogs.stream()
-                .filter(Objects::nonNull)
-                .filter(log -> log.getActorUserId() != null)
-                .filter(log -> actorUserIdFilter == null
-                        || actorUserIdFilter.equals(
+                auditLogs.stream()
+                        .filter(Objects::nonNull)
+                        .filter(log -> log.getActorUserId() != null)
+                        .filter(log -> actorUserIdFilter == null
+                                || actorUserIdFilter.equals(
                                 log.getActorUserId()))
-                .collect(Collectors.groupingBy(
-                        AuditLogResponse::getActorUserId,
-                        LinkedHashMap::new,
-                        Collectors.toList()
-                ));
+                        .collect(Collectors.groupingBy(
+                                AuditLogResponse::getActorUserId,
+                                LinkedHashMap::new,
+                                Collectors.toList()
+                        ));
 
         List<PerformanceReportResponse.UserAuditActivityItem> userActivities = new ArrayList<>();
         for (Map.Entry<Long, List<AuditLogResponse>> entry : logsByActor.entrySet()) {
             List<AuditLogResponse> actorLogs = entry.getValue();
             Map<String, Long> byAction = actorLogs.stream()
-        .collect(Collectors.groupingBy(
-                log -> log.getAction() != null
-                        ? log.getAction() : "UNKNOWN",
-                TreeMap::new,
-                Collectors.counting()
-        ));
+                    .collect(Collectors.groupingBy(
+                            log -> log.getAction() != null
+                                    ? log.getAction() : "UNKNOWN",
+                            TreeMap::new,
+                            Collectors.counting()
+                    ));
 
-        Map<String, Long> byEntity = actorLogs.stream()
-        .collect(Collectors.groupingBy(
-                log -> log.getEntityType() != null
-                        ? log.getEntityType() : "UNKNOWN",
-                TreeMap::new,
-                Collectors.counting()
-        ));     
+            Map<String, Long> byEntity = actorLogs.stream()
+                    .collect(Collectors.groupingBy(
+                            log -> log.getEntityType() != null
+                                    ? log.getEntityType() : "UNKNOWN",
+                            TreeMap::new,
+                            Collectors.counting()
+                    ));
             LocalDateTime lastActivity = actorLogs.stream()
                     .map(AuditLogResponse::getTimestamp)
                     .filter(Objects::nonNull)
@@ -1286,7 +1288,7 @@ for (ServiceJobDTO job : jobsInPeriod) {
         return categories.stream()
                 .map(c -> new ChartSeriesDTO.ChartSegment(
                         c.getCategoryName(),
-                        c.getTotalQuantity(),
+                        c.getItemCount(),
                         c.getCostValuation(),
                         percentage(c.getCostValuation(), total)
                 ))
@@ -1340,47 +1342,47 @@ for (ServiceJobDTO job : jobsInPeriod) {
     }
 
     private BigDecimal calculateAverageCompletionHours(
-        List<ServiceJobDTO> jobs) {
+            List<ServiceJobDTO> jobs) {
 
-    List<Double> durations = new ArrayList<>();
+        List<Double> durations = new ArrayList<>();
 
-    for (ServiceJobDTO job : jobs) {
+        for (ServiceJobDTO job : jobs) {
 
-        String status = job.getStatus();
+            String status = job.getStatus();
 
-        boolean completed =
-                "COMPLETED".equalsIgnoreCase(status)
-                || "CLOSED".equalsIgnoreCase(status);
+            boolean completed =
+                    "COMPLETED".equalsIgnoreCase(status)
+                            || "CLOSED".equalsIgnoreCase(status);
 
-        if (!completed
-                || job.getJobDate() == null
-                || job.getActualCompletionDate() == null
-                || job.getActualCompletionDate()
-                        .isBefore(job.getJobDate())) {
-            continue;
+            if (!completed
+                    || job.getJobDate() == null
+                    || job.getActualCompletionDate() == null
+                    || job.getActualCompletionDate()
+                    .isBefore(job.getJobDate())) {
+                continue;
+            }
+
+            double hours = Duration.between(
+                    job.getJobDate(),
+                    job.getActualCompletionDate()
+            ).toMinutes() / 60.0;
+
+            durations.add(hours);
         }
 
-        double hours = Duration.between(
-                job.getJobDate(),
-                job.getActualCompletionDate()
-        ).toMinutes() / 60.0;
+        if (durations.isEmpty()) {
+            return BigDecimal.ZERO.setScale(
+                    2, RoundingMode.HALF_UP);
+        }
 
-        durations.add(hours);
+        double avg = durations.stream()
+                .mapToDouble(Double::doubleValue)
+                .average()
+                .orElse(0.0);
+
+        return BigDecimal.valueOf(avg)
+                .setScale(2, RoundingMode.HALF_UP);
     }
-
-    if (durations.isEmpty()) {
-        return BigDecimal.ZERO.setScale(
-                2, RoundingMode.HALF_UP);
-    }
-
-    double avg = durations.stream()
-            .mapToDouble(Double::doubleValue)
-            .average()
-            .orElse(0.0);
-
-    return BigDecimal.valueOf(avg)
-            .setScale(2, RoundingMode.HALF_UP);
-}
 
     private LocalDate resolveAppointmentDate(AppointmentResponse appointment) {
         if (appointment.getConfirmedDate() != null) {

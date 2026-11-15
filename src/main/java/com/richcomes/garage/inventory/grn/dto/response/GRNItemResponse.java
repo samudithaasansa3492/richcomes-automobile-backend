@@ -9,7 +9,10 @@ public class GRNItemResponse {
     private Long stockItemId;
     private String itemCode;
     private String itemName;
-    private Integer receivedQuantity;
+
+    // Supports integer and decimal quantities
+    private BigDecimal receivedQuantity;
+
     private BigDecimal unitCost;
     private BigDecimal lineTotal;
 
@@ -48,11 +51,11 @@ public class GRNItemResponse {
         this.itemName = itemName;
     }
 
-    public Integer getReceivedQuantity() {
+    public BigDecimal getReceivedQuantity() {
         return receivedQuantity;
     }
 
-    public void setReceivedQuantity(Integer receivedQuantity) {
+    public void setReceivedQuantity(BigDecimal receivedQuantity) {
         this.receivedQuantity = receivedQuantity;
     }
 

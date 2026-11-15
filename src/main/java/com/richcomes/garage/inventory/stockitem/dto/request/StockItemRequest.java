@@ -2,6 +2,7 @@
 package com.richcomes.garage.inventory.stockitem.dto.request;
 
 import jakarta.validation.constraints.*;
+
 import java.math.BigDecimal;
 
 public class StockItemRequest {
@@ -26,9 +27,27 @@ public class StockItemRequest {
     @Size(max = 500)
     private String imageUrl;
 
+    // Measurement unit: PCS, L, ML
+    // Defaults to PCS for existing clients.
+    @NotNull(message = "Unit is required")
+    @Pattern(
+            regexp = "PCS|L|ML",
+            message = "Unit must be PCS, L or ML"
+    )
+    private String unit = "PCS";
+
+    // Decimal reorder level support
     @NotNull(message = "Reorder level is required")
-    @Min(value = 0, message = "Reorder level cannot be negative")
-    private Integer reorderLevel;
+    @DecimalMin(
+            value = "0.000",
+            message = "Reorder level cannot be negative"
+    )
+    @Digits(
+            integer = 11,
+            fraction = 3,
+            message = "Reorder level supports up to 3 decimal places"
+    )
+    private BigDecimal reorderLevel;
 
     @NotNull(message = "Unit cost is required")
     @DecimalMin(value = "0.00")
@@ -91,11 +110,19 @@ public class StockItemRequest {
         this.imageUrl = imageUrl;
     }
 
-    public Integer getReorderLevel() {
+    public String getUnit() {
+        return unit;
+    }
+
+    public void setUnit(String unit) {
+        this.unit = unit;
+    }
+
+    public BigDecimal getReorderLevel() {
         return reorderLevel;
     }
 
-    public void setReorderLevel(Integer reorderLevel) {
+    public void setReorderLevel(BigDecimal reorderLevel) {
         this.reorderLevel = reorderLevel;
     }
 
