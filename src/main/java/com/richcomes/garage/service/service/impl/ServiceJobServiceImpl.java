@@ -21,7 +21,6 @@ public class ServiceJobServiceImpl implements ServiceJobService {
         this.repository = repository;
     }
 
-    // Helper Method: Entity එක DTO එකකට හැරවීම
     private ServiceJobDTO convertToDTO(ServiceJob entity) {
         ServiceJobDTO dto = new ServiceJobDTO();
         dto.setId(entity.getId());
@@ -41,7 +40,6 @@ public class ServiceJobServiceImpl implements ServiceJobService {
         return dto;
     }
 
-    // Helper Method: DTO එක Entity එකකට හැරවීම
     private ServiceJob convertToEntity(ServiceJobDTO dto) {
         ServiceJob entity = new ServiceJob();
         entity.setId(dto.getId());

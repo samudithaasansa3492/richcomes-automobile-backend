@@ -11,7 +11,7 @@ public class ServiceItem {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // ServiceCategory එක සමඟ ඇති සම්බන්ධතාවය (Foreign Key)
+    // ServiceCategory (Foreign Key)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "category_id", nullable = false)
     private ServiceCategory category;

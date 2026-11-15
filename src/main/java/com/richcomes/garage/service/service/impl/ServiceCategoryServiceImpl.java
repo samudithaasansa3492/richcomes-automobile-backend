@@ -20,7 +20,6 @@ public class ServiceCategoryServiceImpl implements ServiceCategoryService {
         this.repository = repository;
     }
 
-    // Helper Method: Entity එක DTO එකකට හැරවීම (Mapping)
     private ServiceCategoryDTO convertToDTO(ServiceCategory entity) {
         ServiceCategoryDTO dto = new ServiceCategoryDTO();
         dto.setId(entity.getId());
@@ -30,7 +29,7 @@ public class ServiceCategoryServiceImpl implements ServiceCategoryService {
         return dto;
     }
 
-    // Helper Method: DTO එක Entity එකකට හැරවීම (Database එකට Save කිරීමට පෙර)
+
     private ServiceCategory convertToEntity(ServiceCategoryDTO dto) {
         ServiceCategory entity = new ServiceCategory();
         entity.setId(dto.getId());
@@ -50,7 +49,7 @@ public class ServiceCategoryServiceImpl implements ServiceCategoryService {
     @Override
     public List<ServiceCategoryDTO> getAllCategories() {
         List<ServiceCategory> entities = repository.findAll();
-        // සියලුම Entities ටික DTO ලැයිස්තුවකට හරවා යැවීම
+
         return entities.stream()
                 .map(this::convertToDTO)
                 .collect(Collectors.toList());

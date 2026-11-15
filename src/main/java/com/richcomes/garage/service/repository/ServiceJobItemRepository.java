@@ -8,6 +8,6 @@ import java.util.List;
 
 @Repository
 public interface ServiceJobItemRepository extends JpaRepository<ServiceJobItem, Long> {
-    // යම්කිසි Job එකකට අදාළව කර ඇති සියලුම සේවාවන් සොයාගැනීමට
+
     List<ServiceJobItem> findByServiceJobId(Long serviceJobId);
 }

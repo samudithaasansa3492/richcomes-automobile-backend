@@ -14,7 +14,7 @@ public class ServiceJob {
     @Column(name = "job_no", unique = true, nullable = false)
     private String jobNo;
 
-    // අනිත් සාමාජිකයන්ගේ tables වලට සම්බන්ධ වන IDs
+
     @Column(name = "vehicle_id")
     private Long vehicleId;
 
@@ -50,7 +50,7 @@ public class ServiceJob {
     public ServiceJob() {
     }
 
-    // JobStatus Enum (තත්ත්වයන් ලැයිස්තුව)
+    // JobStatus Enum
     public enum JobStatus {
         PENDING, IN_PROGRESS, COMPLETED, CLOSED, CANCELLED
     }
