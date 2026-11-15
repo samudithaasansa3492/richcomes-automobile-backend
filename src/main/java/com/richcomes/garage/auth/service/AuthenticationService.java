@@ -48,7 +48,7 @@ public class AuthenticationService {
             // Unusable/legacy hashes must not leak account state to the client.
             throw badCredentials();
         }
-        if (!matches || account == null || !account.isEnabled() || !account.getEmployee().isActive()) {
+        if (!matches || account == null || !com.richcomes.garage.auth.security.AccountAccessPolicy.canAuthenticate(account)) {
             throw badCredentials();
         }
         return tokens.issue(account.getId());

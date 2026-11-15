@@ -199,10 +199,10 @@ class UserAccountServiceTest {
     @Test
     void replacesRolesAndReturnsOnlyNewRoleCodes() {
         UserAccount account = existingAccount();
-        Role technician = new Role("TECHNICIAN", "Technician");
-        when(roles.findByCode("TECHNICIAN")).thenReturn(Optional.of(technician));
-        var response = service.replaceRoles(1L, new AccountRolesUpdateRequest(Set.of("TECHNICIAN")), 99L);
-        assertEquals(Set.of("TECHNICIAN"), response.roleCodes());
+        Role technician = new Role("OWNER", "Owner");
+        when(roles.findByCode("OWNER")).thenReturn(Optional.of(technician));
+        var response = service.replaceRoles(1L, new AccountRolesUpdateRequest(Set.of("OWNER")), 99L);
+        assertEquals(Set.of("OWNER"), response.roleCodes());
         assertEquals(Set.of(technician), account.getRoles());
     }
 
@@ -242,9 +242,9 @@ class UserAccountServiceTest {
     @Test
     void rejectedOwnerRemovalDoesNotMutateAccount() {
         var account = existingAccount(); account.enable();
-        doThrow(new AccountOperationException(LAST_ACTIVE_ADMIN, "Last admin"))
+        doThrow(new AccountOperationException(LAST_ACTIVE_OWNER, "Last admin"))
                 .when(guard).protectOwner(account);
-        assertCode(LAST_ACTIVE_ADMIN, () -> service.disableAccount(1L, 99L));
+        assertCode(LAST_ACTIVE_OWNER, () -> service.disableAccount(1L, 99L));
         assertTrue(account.isEnabled());
         var order = inOrder(guard, accounts);
         order.verify(guard).rejectSelf(1L, 99L);
@@ -257,11 +257,11 @@ class UserAccountServiceTest {
     @Test
     void removingOwnerRoleChecksGuardBeforeMutatingRoles() {
         var account = existingAccount();
-        var owner = new Role("OWNER_ADMIN", "Admin");
+        var owner = new Role("OWNER", "Admin");
         account.assignRole(owner); account.enable();
-        doThrow(new AccountOperationException(LAST_ACTIVE_ADMIN, "Last admin"))
+        doThrow(new AccountOperationException(LAST_ACTIVE_OWNER, "Last admin"))
                 .when(guard).protectOwner(account);
-        assertCode(LAST_ACTIVE_ADMIN, () -> service.replaceRoles(1L,
+        assertCode(LAST_ACTIVE_OWNER, () -> service.replaceRoles(1L,
                 new AccountRolesUpdateRequest(Set.of("CASHIER")), 99L));
         assertTrue(account.getRoles().contains(owner));
         verify(accounts, never()).saveAndFlush(any());
@@ -270,10 +270,10 @@ class UserAccountServiceTest {
     @Test
     void retainingOwnerRoleDoesNotRemoveAdministratorAccess() {
         var account = existingAccount();
-        var owner = new Role("OWNER_ADMIN", "Admin");
+        var owner = new Role("OWNER", "Admin");
         account.assignRole(owner); account.enable();
-        when(roles.findByCode("OWNER_ADMIN")).thenReturn(Optional.of(owner));
-        service.replaceRoles(1L, new AccountRolesUpdateRequest(Set.of("OWNER_ADMIN")), 99L);
+        when(roles.findByCode("OWNER")).thenReturn(Optional.of(owner));
+        service.replaceRoles(1L, new AccountRolesUpdateRequest(Set.of("OWNER")), 99L);
         verify(guard, never()).protectOwner(any());
         assertEquals(Set.of(owner), account.getRoles());
     }
@@ -300,6 +300,39 @@ class UserAccountServiceTest {
         assertCode(INVALID_REQUEST, () -> service.listAccounts(-1, 20));
         assertCode(INVALID_REQUEST, () -> service.listAccounts(0, 101));
         assertCode(INVALID_REQUEST, () -> service.listAccounts(0, 0));
+    }
+
+    @Test
+    void techniciansCannotReceiveAccountsOrBeEnabled() {
+        employee.setPosition(com.richcomes.garage.employee.entity.EmployeePosition.TECHNICIAN);
+        assertCode(INVALID_REQUEST, () -> service.createAccount(validRequest()));
+        var account = existingAccount();
+        assertCode(INVALID_REQUEST, () -> service.enableAccount(1L));
+        assertFalse(account.isEnabled());
+        verifyNoInteractions(encoder);
+        verify(accounts, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void businessApiCannotAssignDeveloperOrLegacyRoles() {
+        for (String code : Set.of("ADMIN", "TECHNICIAN", "OWNER_ADMIN")) {
+            assertCode(UNKNOWN_ROLE, () -> service.createAccount(request("test.user", RAW_PASSWORD, Set.of(code))));
+            var account = existingAccount();
+            assertCode(UNKNOWN_ROLE, () -> service.replaceRoles(1L, new AccountRolesUpdateRequest(Set.of(code)), 99L));
+            assertEquals(Set.of(cashier), account.getRoles());
+        }
+        verify(accounts, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void businessApiCannotMutateTechnicalAccounts() {
+        var account = existingAccount();
+        account.assignRole(new Role("ADMIN", "Technical administrator"));
+        assertCode(TECHNICAL_ACCOUNT_PROTECTED, () -> service.enableAccount(1L));
+        assertCode(TECHNICAL_ACCOUNT_PROTECTED, () -> service.disableAccount(1L, 99L));
+        assertCode(TECHNICAL_ACCOUNT_PROTECTED, () -> service.replaceRoles(1L,
+                new AccountRolesUpdateRequest(Set.of("OWNER")), 99L));
+        verify(accounts, never()).saveAndFlush(any());
     }
 
     private UserAccount existingAccount() {

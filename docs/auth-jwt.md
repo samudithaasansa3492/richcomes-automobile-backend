@@ -71,7 +71,7 @@ from toString output; do not enable HTTP request/response body logging for auth.
 | PATCH | /api/employees/{id}/deactivate | employee:deactivate |
 | Any | All other routes/methods | Denied |
 
-OWNER_ADMIN has no implicit bypass; its database role must have explicit permissions.
+OWNER has no implicit bypass; its database role must have explicit permissions.
 Other team modules, health endpoints and Swagger are denied until explicitly mapped.
 Review those mappings with the team before deployment. No cross-origin frontend
 allowlist is configured yet. Permission checks here are action-level; requirements

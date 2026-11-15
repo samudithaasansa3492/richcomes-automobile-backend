@@ -97,7 +97,7 @@ public final class FirstAdminProvisioner {
     private long lockOwnerRole(Connection connection) throws SQLException {
         // Same stable row and lock order as AdminAccessGuard. Held until commit/rollback.
         try (var statement = prepare(connection,
-                "SELECT id FROM garage.roles WHERE code = 'OWNER_ADMIN' FOR UPDATE");
+                "SELECT id FROM garage.roles WHERE code = 'OWNER' FOR UPDATE");
              var rows = statement.executeQuery()) {
             if (!rows.next()) throw failure(SEED_REQUIRED, "Apply the approved role/permission seed first");
             return rows.getLong(1);
@@ -110,11 +110,15 @@ public final class FirstAdminProvisioner {
                 JOIN garage.employees e ON e.id = a.employee_id
                 JOIN garage.user_account_roles ar ON ar.user_account_id = a.id
                 JOIN garage.roles r ON r.id = ar.role_id
-                WHERE a.enabled = TRUE AND e.active = TRUE AND r.code = 'OWNER_ADMIN'
+                WHERE a.enabled = TRUE AND e.active = TRUE AND r.code = 'OWNER'
+                  AND e.position <> 'TECHNICIAN'
+                  AND NOT EXISTS (SELECT 1 FROM garage.user_account_roles other
+                      JOIN garage.roles other_role ON other_role.id = other.role_id
+                      WHERE other.user_account_id = a.id AND other_role.code NOT IN ('OWNER', 'CASHIER'))
                 """); var rows = statement.executeQuery()) {
             rows.next();
             if (rows.getLong(1) != 0) {
-                throw failure(ADMIN_ALREADY_EXISTS, "An active administrator already exists; use the account API");
+                throw failure(OWNER_ALREADY_EXISTS, "An active owner already exists; use the account API");
             }
         }
     }
@@ -131,17 +135,20 @@ public final class FirstAdminProvisioner {
             }
         }
         if (!actual.containsAll(REQUIRED_PERMISSIONS)) {
-            throw failure(SEED_REQUIRED, "Administrator role is missing required permissions");
+            throw failure(SEED_REQUIRED, "Owner role is missing required permissions");
         }
     }
 
     private void verifyEmployee(Connection connection, UUID employeeId) throws SQLException {
         try (var statement = prepare(connection,
-                "SELECT active FROM garage.employees WHERE id = ? FOR UPDATE")) {
+                "SELECT active, position FROM garage.employees WHERE id = ? FOR UPDATE")) {
             statement.setObject(1, employeeId);
             try (var rows = statement.executeQuery()) {
                 if (!rows.next()) throw failure(EMPLOYEE_NOT_FOUND, "Employee not found");
                 if (!rows.getBoolean(1)) throw failure(EMPLOYEE_INACTIVE, "Employee must be active");
+                if ("TECHNICIAN".equals(rows.getString(2))) {
+                    throw failure(INVALID_INPUT, "Technicians cannot have system accounts");
+                }
             }
         }
     }

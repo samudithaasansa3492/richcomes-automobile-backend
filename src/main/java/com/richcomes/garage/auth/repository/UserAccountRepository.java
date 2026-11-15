@@ -20,7 +20,10 @@ public interface UserAccountRepository extends JpaRepository<UserAccount, Long> 
 
     @Query("""
             select count(a) from UserAccount a join a.roles r
-            where a.enabled = true and a.employee.active = true and r.code = 'OWNER_ADMIN'
+            where a.enabled = true and a.employee.active = true and r.code = 'OWNER'
+              and a.employee.position <> com.richcomes.garage.employee.entity.EmployeePosition.TECHNICIAN
+              and not exists (select other.id from UserAccount other join other.roles technical
+                              where other.id = a.id and technical.code not in ('OWNER', 'CASHIER'))
             """)
     long countActiveOwners();
 

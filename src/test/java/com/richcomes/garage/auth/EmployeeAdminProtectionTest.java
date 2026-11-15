@@ -8,7 +8,7 @@ import com.richcomes.garage.employee.service.EmployeeService;
 import org.junit.jupiter.api.Test;
 import java.util.Optional;
 import java.util.UUID;
-import static com.richcomes.garage.auth.exception.AccountOperationException.Code.LAST_ACTIVE_ADMIN;
+import static com.richcomes.garage.auth.exception.AccountOperationException.Code.LAST_ACTIVE_OWNER;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -19,7 +19,7 @@ class EmployeeAdminProtectionTest {
 
     @Test void lastAdministratorFailurePreventsEmployeeMutation() {
         var id = UUID.randomUUID();
-        doThrow(new AccountOperationException(LAST_ACTIVE_ADMIN, "Last admin"))
+        doThrow(new AccountOperationException(LAST_ACTIVE_OWNER, "Last admin"))
                 .when(guard).protectEmployee(id, 99L);
         assertThrows(AccountOperationException.class, () -> service.deactivateEmployee(id, 99L));
         var order = inOrder(guard);
@@ -40,4 +40,21 @@ class EmployeeAdminProtectionTest {
         order.verify(employees).findById(id);
         order.verify(employees).save(employee);
     }
+    @Test void positionUpdateChecksAccountEligibilityBeforeLoadingEmployee() {
+        var id = UUID.randomUUID();
+        var request = new com.richcomes.garage.employee.dto.EmployeeRequest(
+                "EMP-TEST", "123456789V", "Test", "Employee", "0700000000",
+                com.richcomes.garage.employee.entity.EmployeePosition.TECHNICIAN, java.math.BigDecimal.ZERO);
+        doThrow(new AccountOperationException(
+                com.richcomes.garage.auth.exception.AccountOperationException.Code.INVALID_REQUEST,
+                "Employee already has an account"))
+                .when(guard).rejectTechnicianWithAccount(id);
+        assertThrows(AccountOperationException.class, () -> service.updateEmployee(id, request));
+        var order = inOrder(guard);
+        order.verify(guard).lockAdministration();
+        order.verify(guard).rejectTechnicalEmployeeMutation(id);
+        order.verify(guard).rejectTechnicianWithAccount(id);
+        verifyNoInteractions(employees);
+    }
+
 }

@@ -29,7 +29,7 @@ public class AccountJwtAuthenticationConverter implements Converter<Jwt, Abstrac
             throw invalidToken();
         }
         var account = accounts.findOneById(accountId).orElseThrow(this::invalidToken);
-        if (!account.isEnabled() || !account.getEmployee().isActive()) {
+        if (!AccountAccessPolicy.canAuthenticate(account)) {
             throw invalidToken();
         }
         var principal = AccountPrincipal.from(account);

@@ -16,7 +16,7 @@ class FirstAdminCommandTest {
     @TempDir Path temporary;
 
     @Test void successfulCommandUsesHiddenInputsAndClearsAllPasswordArrays() throws Exception {
-        var terminal = inputs("CREATE FIRST ADMIN", "same synthetic password", "same synthetic password");
+        var terminal = inputs("CREATE FIRST OWNER", "same synthetic password", "same synthetic password");
         var calls = new AtomicInteger();
         int result = FirstAdminCommand.execute(args(), terminal, (target, dbPassword, employeeId, username, password) -> {
             calls.incrementAndGet();
@@ -33,7 +33,7 @@ class FirstAdminCommandTest {
     }
 
     @Test void confirmationMismatchDoesNotCallProvisioner() throws Exception {
-        var terminal = inputs("CREATE FIRST ADMIN", "same synthetic password", "different password");
+        var terminal = inputs("CREATE FIRST OWNER", "same synthetic password", "different password");
         assertEquals(2, FirstAdminCommand.execute(args(), terminal, (a, b, c, d, e) -> {
             fail("No database connection allowed"); return 0;
         }));
@@ -55,7 +55,7 @@ class FirstAdminCommandTest {
     }
 
     @Test void unexpectedExceptionsNeverPrintSecretsOrStackTrace() throws Exception {
-        var terminal = inputs("CREATE FIRST ADMIN", "same synthetic password", "same synthetic password");
+        var terminal = inputs("CREATE FIRST OWNER", "same synthetic password", "same synthetic password");
         assertEquals(4, FirstAdminCommand.execute(args(), terminal, (a, b, c, d, e) -> {
             throw new IllegalStateException("secret-value same synthetic password");
         }));
@@ -65,11 +65,11 @@ class FirstAdminCommandTest {
     }
 
     @Test void domainRefusalReturnsNonzeroAndClearsSecrets() throws Exception {
-        var terminal = inputs("CREATE FIRST ADMIN", "same synthetic password", "same synthetic password");
+        var terminal = inputs("CREATE FIRST OWNER", "same synthetic password", "same synthetic password");
         assertEquals(3, FirstAdminCommand.execute(args(), terminal, (a, b, c, d, e) -> {
-            throw new ProvisioningException(ProvisioningException.Code.ADMIN_ALREADY_EXISTS, "Administrator exists");
+            throw new ProvisioningException(ProvisioningException.Code.OWNER_ALREADY_EXISTS, "Administrator exists");
         }));
-        assertTrue(terminal.output.toString().contains("ADMIN_ALREADY_EXISTS"));
+        assertTrue(terminal.output.toString().contains("OWNER_ALREADY_EXISTS"));
         assertNoSecrets(terminal);
     }
 

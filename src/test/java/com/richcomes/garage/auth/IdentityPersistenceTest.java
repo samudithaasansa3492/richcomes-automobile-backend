@@ -163,6 +163,51 @@ class IdentityPersistenceTest {
         assertTrue(accounts.findByUsername("cashier.one").orElseThrow().isEnabled());
     }
 
+    @Test
+    void onlyUsableBusinessOwnersCountTowardsLastOwnerProtection() {
+        Role owner = roles.saveAndFlush(new Role("OWNER", "Client owner"));
+        Role admin = roles.saveAndFlush(new Role("ADMIN", "Developer"));
+        Role cashier = roles.saveAndFlush(new Role("CASHIER", "Cashier"));
+        Role legacy = roles.saveAndFlush(new Role("LEGACY", "Unrecognized role"));
+
+        var realOwner = new UserAccount(employee(), "real.owner", TEST_HASH);
+        realOwner.assignRole(owner);
+        realOwner.assignRole(cashier);
+        realOwner.enable();
+        accounts.saveAndFlush(realOwner);
+
+        var developer = new UserAccount(employee(), "developer.admin", TEST_HASH);
+        developer.assignRole(admin);
+        developer.enable();
+        accounts.saveAndFlush(developer);
+
+        var mixed = new UserAccount(employee(), "mixed.admin", TEST_HASH);
+        mixed.assignRole(owner);
+        mixed.assignRole(admin);
+        mixed.enable();
+        accounts.saveAndFlush(mixed);
+
+        var technicianEmployee = employee();
+        technicianEmployee.setPosition(EmployeePosition.TECHNICIAN);
+        var technician = new UserAccount(technicianEmployee, "legacy.technician", TEST_HASH);
+        technician.assignRole(owner);
+        technician.enable();
+        accounts.saveAndFlush(technician);
+
+        var invalid = new UserAccount(employee(), "legacy.owner", TEST_HASH);
+        invalid.assignRole(owner);
+        invalid.assignRole(legacy);
+        invalid.enable();
+        accounts.saveAndFlush(invalid);
+        entityManager.clear();
+
+        assertEquals(1L, accounts.countActiveOwners());
+        var persisted = accounts.findById(realOwner.getId()).orElseThrow();
+        persisted.disable();
+        accounts.flush();
+        assertEquals(0L, accounts.countActiveOwners());
+    }
+
     private Employee employee() {
         Employee employee = new Employee();
         String suffix = UUID.randomUUID().toString().substring(0, 12);

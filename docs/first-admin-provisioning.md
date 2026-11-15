@@ -1,36 +1,34 @@
-# Member 1 roles and first administrator
+# Member 1 roles and first owner
 
 ## Approval and scope
 
-This change adds V13 seed SQL and an explicit operator command. It does not apply V12/V13
+This code includes V13/V14 SQL and an explicit operator command. It does not apply migrations
 to shared Supabase or provision an account there. Shared migration/data changes require
 separate approval. **Normal Spring Boot startup runs pending Flyway migrations**, including
-V13: do not start the application against the shared database before rollout approval.
+V14: do not start the application against the shared database before rollout approval.
 
-V13 creates missing role/permission definitions and adds seven OWNER_ADMIN grants:
+V13 is retained unchanged as historical migration SQL. V14 corrects its original
+OWNER_ADMIN/TECHNICIAN role model. After V1-V14 the role definitions are:
 
 | Role | Member 1 permissions seeded |
 | --- | --- |
-| OWNER_ADMIN | employee:read, employee:create, employee:update, employee:deactivate, account:read, account:create, account:manage |
-| CASHIER | None |
-| TECHNICIAN | None |
+| OWNER | employee:read, employee:create, employee:update, employee:deactivate, account:read, account:create, account:manage |
+| CASHIER | None; operational mapping is a separate integration step |
+| ADMIN | None; technical administration endpoints are not implemented yet |
 
-Cashier/Technician business-module permissions need separate team agreement. Login and
-`/api/auth/me` remain available to otherwise eligible enabled accounts. Employee.position
-is not an authorization role.
-
-The migration uses natural-key conflicts to avoid duplicate definitions/mappings. Existing
-IDs, descriptions, extra grants and assignments are retained. It grants these seven
-permissions to every existing OWNER_ADMIN role holder, so review existing assignments
-before an approved rollout. It does not seed Employees, accounts, passwords or any public
-RLS policies. V12 stays unchanged. Flyway applies V13 once; it is not a startup grant reset.
+TECHNICIAN is only an Employee position, not a system role. V14 preserves legacy
+owner grants and IDs, disables legacy technician accounts, and refuses ambiguous
+existing OWNER/ADMIN definitions. See [role-model.md](role-model.md) for boundaries,
+remaining implementation work, and the migration upgrade validation requirements.
+This command provisions the first client OWNER, never a developer ADMIN. Its Java
+class name is retained for invocation compatibility.
 
 ## Preconditions
 
 - Java 21 and dependencies built from the approved branch.
-- Original migrations through V13 applied to the specifically approved target database.
-- An existing active Employee with no UserAccount, and an unused username.
-- No enabled OWNER_ADMIN account linked to an active Employee.
+- Original migrations through V14 applied to the specifically approved target database.
+- An existing active non-technician Employee with no UserAccount, and an unused username.
+- No enabled OWNER account linked to an active Employee.
 - A trusted operator with database privileges to read/lock the necessary rows and insert
   accounts and account-role mappings. Anon/authenticated Data API roles are not appropriate.
 - A real interactive terminal; redirected/piped password input is refused.
@@ -76,7 +74,7 @@ neither Spring Boot nor Flyway and does not require JWT signing keys.
 java -cp 'target/classes:target/provisioning-lib/*' com.richcomes.provisioning.FirstAdminCommand --config /absolute/path/to/target.properties
 ```
 
-The command displays the database host/port/name and requires `CREATE FIRST ADMIN`.
+The command displays the database host/port/name and requires `CREATE FIRST OWNER`.
 It asks for Employee UUID, username, then hidden database password, hidden new account
 password and hidden confirmation. The account password must be 15–72 Java characters
 and at most 72 UTF-8 bytes, consistent with the existing Account API and BCrypt limit.
@@ -84,7 +82,7 @@ Passwords are not trimmed or silently truncated. Password arrays are cleared aft
 JDBC/encoder internals can still create temporary immutable strings.
 
 Success prints only the newly created account ID. The account is enabled and receives
-OWNER_ADMIN. Use normal authenticated Account APIs for subsequent management.
+OWNER. Use normal authenticated Account APIs for subsequent management.
 
 Exit codes: 0 success; 2 usage/cancellation/password-confirmation failure or no terminal;
 3 domain refusal; 4 configuration/database/unexpected failure. Arbitrary exception text,
@@ -94,7 +92,7 @@ a lost connection during commit can leave the outcome uncertain. There is no aut
 
 ## Atomicity and repeat execution
 
-A dedicated JDBC transaction uses READ_COMMITTED and locks the same OWNER_ADMIN role row
+A dedicated JDBC transaction uses READ_COMMITTED and locks the same OWNER role row
 as AdminAccessGuard before checking active-owner count. The Employee row is also locked.
 The command verifies required owner permissions, active Employee and account uniqueness,
 then inserts the encoded account and role mapping and commits together. Failure rolls back.
@@ -111,7 +109,7 @@ access-changing code must respect the locking protocol to preserve these guarant
 - Selected regression tests plus FirstAdminProvisionerTest, FirstAdminCommandTest and
   ProvisioningTargetTest. H2 tests exercise the command service, transaction rollback and
   concurrent creation, but do not validate PostgreSQL seed SQL or its locking behavior.
-- On isolated PostgreSQL 17.11, original Flyway V1–V13, seed contents and unchanged privileges.
+- On isolated PostgreSQL 17.11, original Flyway V1–V14, seed contents and unchanged privileges.
 - Re-execute the seed SQL in an isolated test transaction and confirm no duplicate rows,
   no description/extra-grant loss and stable existing IDs; roll back that test transaction.
 - Run the actual console command with synthetic hidden inputs in a PTY, validate enabled
@@ -119,6 +117,6 @@ access-changing code must respect the locking protocol to preserve these guarant
 - Verify refusals for existing active owner, duplicate links/usernames, inactive Employee,
   missing role/permissions and invalid passwords; verify no changes after rejection.
 - Run two provisioning processes against distinct Employee targets with real overlapping
-  PostgreSQL lock waits; exactly one succeeds and one refuses with ADMIN_ALREADY_EXISTS.
+  PostgreSQL lock waits; exactly one succeeds and one refuses with OWNER_ALREADY_EXISTS.
 - Confirm normal application startup never invokes provisioning and cleanup removes only
   test-owned resources. Shared Supabase is outside isolated validation authorization.

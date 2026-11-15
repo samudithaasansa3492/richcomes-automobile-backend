@@ -38,7 +38,7 @@ class AdminAccessConcurrencyTest {
         var tx = new TransactionTemplate(manager);
         tx.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
         Long[] ids = tx.execute(status -> {
-            var role = roles.saveAndFlush(new Role("OWNER_ADMIN", "Admin"));
+            var role = roles.saveAndFlush(new Role("OWNER", "Admin"));
             return new Long[]{owner("one", role), owner("two", role)};
         });
         var start = new CountDownLatch(1);
@@ -49,7 +49,7 @@ class AdminAccessConcurrencyTest {
             start.countDown();
             var outcomes = java.util.List.of(first.get(15, TimeUnit.SECONDS), second.get(15, TimeUnit.SECONDS));
             assertEquals(1, outcomes.stream().filter("REMOVED"::equals).count());
-            assertEquals(1, outcomes.stream().filter("LAST_ACTIVE_ADMIN"::equals).count());
+            assertEquals(1, outcomes.stream().filter("LAST_ACTIVE_OWNER"::equals).count());
             assertEquals(1L, tx.execute(status -> accounts.countActiveOwners()).longValue());
         } finally {
             executor.shutdownNow();
@@ -77,7 +77,7 @@ class AdminAccessConcurrencyTest {
         employee.setEmployeeCode("EMP-" + suffix);
         employee.setNic("NIC-" + suffix);
         employee.setFirstName("Test"); employee.setLastName("Owner");
-        employee.setPhone("0700000000"); employee.setPosition(EmployeePosition.OWNER_ADMIN);
+        employee.setPhone("0700000000"); employee.setPosition(EmployeePosition.OWNER);
         employee.setPaymentRate(BigDecimal.ZERO);
         em.persist(employee);
         var account = new UserAccount(employee, "owner." + suffix, "encoded-test-hash");

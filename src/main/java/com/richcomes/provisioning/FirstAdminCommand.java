@@ -55,23 +55,23 @@ public final class FirstAdminCommand {
             }
             var target = ProvisioningTarget.load(path);
             terminal.print("Database target: " + target.displayName());
-            terminal.print("This creates an enabled OWNER_ADMIN account. Migrations must already be applied.");
-            if (!"CREATE FIRST ADMIN".equals(terminal.readLine("Type CREATE FIRST ADMIN to continue: "))) {
+            terminal.print("This creates an enabled OWNER account. Migrations must already be applied.");
+            if (!"CREATE FIRST OWNER".equals(terminal.readLine("Type CREATE FIRST OWNER to continue: "))) {
                 terminal.print("Cancelled. No database connection attempted.");
                 return 2;
             }
             UUID employeeId = UUID.fromString(requiredLine(terminal, "Existing active Employee UUID: "));
             String username = requiredLine(terminal, "New account username: ");
             databasePassword = terminal.readPassword("Database password: ");
-            password = terminal.readPassword("New Admin password (15–72 characters, at most 72 UTF-8 bytes): ");
-            confirmation = terminal.readPassword("Confirm Admin password: ");
+            password = terminal.readPassword("New Owner password (15–72 characters, at most 72 UTF-8 bytes): ");
+            confirmation = terminal.readPassword("Confirm Owner password: ");
             if (databasePassword == null || databasePassword.length == 0 || password == null
                     || confirmation == null || !Arrays.equals(password, confirmation)) {
                 terminal.print("Password input missing or confirmation does not match. No database connection attempted.");
                 return 2;
             }
             long id = action.run(target, databasePassword, employeeId, username, password);
-            terminal.print("Created enabled administrator account ID " + id + ". No credentials are displayed.");
+            terminal.print("Created enabled owner account ID " + id + ". No credentials are displayed.");
             return 0;
         } catch (ProvisioningException exception) {
             terminal.print(exception.getCode() + ": " + exception.getMessage());

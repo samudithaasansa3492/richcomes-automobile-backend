@@ -19,8 +19,8 @@ public class AccountExceptionHandler {
         int status = switch (exception.getCode()) {
             case INVALID_REQUEST, UNKNOWN_ROLE -> 400;
             case EMPLOYEE_NOT_FOUND, ACCOUNT_NOT_FOUND -> 404;
-            case SELF_MODIFICATION -> 403;
-            case ADMIN_ROLE_NOT_CONFIGURED -> 503;
+            case SELF_MODIFICATION, TECHNICAL_ACCOUNT_PROTECTED -> 403;
+            case OWNER_ROLE_NOT_CONFIGURED -> 503;
             default -> 409;
         };
         return response(status, exception.getCode().name(), exception.getMessage());

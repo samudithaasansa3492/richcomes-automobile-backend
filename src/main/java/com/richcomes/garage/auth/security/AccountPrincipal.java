@@ -19,8 +19,7 @@ public record AccountPrincipal(Long accountId, UUID employeeId, String username,
     public static AccountPrincipal from(UserAccount account) {
         return new AccountPrincipal(account.getId(), account.getEmployee().getId(), account.getUsername(),
                 account.getRoles().stream().map(Role::getCode).collect(Collectors.toSet()),
-                account.getRoles().stream().flatMap(role -> role.getPermissions().stream())
-                        .map(permission -> permission.getCode()).collect(Collectors.toSet()));
+                AccountAccessPolicy.effectivePermissions(account));
     }
 
     @Override
