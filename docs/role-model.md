@@ -46,8 +46,9 @@ page are configured; this is not a claim of production delivery readiness.
 
 - Separate technical account metadata, standalone session revocation and technical lock/unlock APIs.
 - Redacted health/security-log interfaces and other maintenance operations.
-- Recovery frontend, SMTP deployment, verified email enrollment for real users,
-  gateway abuse controls and PostgreSQL V15 end-to-end validation.
+- Recovery frontend, production SMTP/provider delivery, verified email enrollment for real users,
+  gateway abuse controls and operational rollout remain outstanding. Isolated PostgreSQL V15,
+  recovery HTTP and TLS transport checks passed; see [2026-11-15 validation evidence](validation-evidence-2026-11-15.md).
 - Owner-managed cashier permission configuration and other-module permission mapping.
 
 Technical support must not let an administrator impersonate the owner or grant
