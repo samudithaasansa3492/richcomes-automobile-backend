@@ -57,6 +57,7 @@ class SecurityFlowTest {
     @Autowired private JwtEncoder encoder;
     @Autowired private JwtSettings settings;
     @Autowired private com.richcomes.garage.auth.service.UserAccountService accountService;
+    @Autowired private com.richcomes.garage.auth.recovery.RecoveryService recovery;
     private MockMvc mvc;
     private UserAccount account;
     private Employee employee;
@@ -67,7 +68,7 @@ class SecurityFlowTest {
 
     @BeforeEach
     void setUp() {
-        reset(accounts, accountService);
+        reset(accounts, accountService, recovery);
         mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         employee = new Employee();
         ReflectionTestUtils.setField(employee, "id", UUID.fromString("00000000-0000-0000-0000-000000000001"));
@@ -80,6 +81,56 @@ class SecurityFlowTest {
         when(accounts.findByUsername("cashier.one")).thenReturn(Optional.of(account));
         when(accounts.findOneById(42L)).thenReturn(Optional.of(account));
         token = tokens.issue(42L).accessToken();
+    }
+
+    @Test
+    void recoveredCredentialsRejectOldTokensAndAcceptNewVersion() throws Exception {
+        account.resetPasswordHash(passwords.encode("replacement synthetic password"));
+        mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+        String fresh = tokens.issue(42L, account.getCredentialVersion()).accessToken();
+        mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + fresh)).andExpect(status().isOk());
+    }
+
+    @Test
+    void independentAdminCanRequestRecoveryButCannotReadBusinessData() throws Exception {
+        var admin = new Role("ADMIN", "Technical support");
+        admin.grantPermission(new Permission("account:read", "Accidental grant"));
+        var developer = UserAccount.technical("developer.one", passwords.encode(PASSWORD), admin);
+        developer.enable();
+        ReflectionTestUtils.setField(developer, "id", 42L);
+        when(accounts.findOneById(42L)).thenReturn(Optional.of(developer));
+        mvc.perform(post("/api/technical/recovery/request").header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"username\":\"client.owner\"}"))
+                .andExpect(status().isAccepted()).andExpect(content().string(""))
+                .andExpect(header().string("Cache-Control", "no-store"));
+        verify(recovery).request("client.owner", 42L);
+        mvc.perform(get("/api/accounts").header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/employees").header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
+        mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + token)).andExpect(status().isOk())
+                .andExpect(jsonPath("$.employeeId").isEmpty());
+    }
+
+    @Test
+    void businessRoleCannotAcquireTechnicalAuthorityThroughPermissionGrant() throws Exception {
+        role.grantPermission(new Permission("technical:recovery", "Accidental grant"));
+        mvc.perform(post("/api/technical/recovery/request").header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"username\":\"client.owner\"}"))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(recovery);
+    }
+
+    @Test
+    void recoveryRequestIsGenericAndEnrollmentRequiresAuthentication() throws Exception {
+        mvc.perform(post("/api/auth/recovery/request").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"absent.user\"}"))
+                .andExpect(status().isAccepted()).andExpect(content().string(""));
+        doThrow(new com.richcomes.garage.auth.recovery.RecoveryFailure()).when(recovery).request("absent.user", null);
+        mvc.perform(post("/api/auth/recovery/request").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"absent.user\"}"))
+                .andExpect(status().isAccepted()).andExpect(content().string(""));
+        mvc.perform(post("/api/auth/recovery/email").contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -320,6 +371,16 @@ class SecurityFlowTest {
             EmployeeProbe.class, com.richcomes.garage.auth.controller.AccountController.class,
             com.richcomes.garage.auth.controller.AccountExceptionHandler.class})
     static class TestConfig {
+        @Bean com.richcomes.garage.auth.recovery.RecoveryService recoveryService() {
+            return mock(com.richcomes.garage.auth.recovery.RecoveryService.class);
+        }
+        @Bean com.richcomes.garage.auth.recovery.RecoveryController recoveryController(
+                com.richcomes.garage.auth.recovery.RecoveryService service) {
+            return new com.richcomes.garage.auth.recovery.RecoveryController(service);
+        }
+        @Bean com.richcomes.garage.auth.recovery.RecoveryExceptionHandler recoveryExceptionHandler() {
+            return new com.richcomes.garage.auth.recovery.RecoveryExceptionHandler();
+        }
         @Bean com.richcomes.garage.auth.service.UserAccountService accountService() {
             return mock(com.richcomes.garage.auth.service.UserAccountService.class);
         }

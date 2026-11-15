@@ -208,6 +208,21 @@ class IdentityPersistenceTest {
         assertEquals(0L, accounts.countActiveOwners());
     }
 
+    @Test
+    void independentDeveloperPersistsWithoutEmployeeAndIsExcludedFromBusinessPages() {
+        var role = roles.saveAndFlush(new Role("ADMIN", "Developer"));
+        var developer = UserAccount.technical("developer.one", TEST_HASH, role);
+        developer.enable();
+        accounts.saveAndFlush(developer);
+        entityManager.clear();
+        var loaded = accounts.findByUsername("developer.one").orElseThrow();
+        assertTrue(loaded.isTechnical());
+        assertNull(loaded.getEmployee());
+        assertEquals(0, accounts.countActiveOwners());
+        assertEquals(0, accounts.findByIdentityKind("BUSINESS", org.springframework.data.domain.PageRequest.of(0, 10))
+                .getTotalElements());
+    }
+
     private Employee employee() {
         Employee employee = new Employee();
         String suffix = UUID.randomUUID().toString().substring(0, 12);

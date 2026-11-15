@@ -32,14 +32,22 @@ Last-owner protection and the explicit bootstrap command now refer to OWNER, not
 ADMIN. The legacy Java class names FirstAdminCommand/FirstAdminProvisioner remain
 for invocation compatibility; confirmation now requires CREATE FIRST OWNER.
 
-## Not yet implemented; do not claim full developer administration
+## Developer identity and recovery follow-up (V15)
 
-- Independent developer identity provisioning (current UserAccount requires an
-  Employee; do not create synthetic garage employees for developers).
-- Separate technical account metadata endpoints, audited recovery, session/token
-  revocation, technical lock/unlock and recovery authorization controls.
-- Redacted health/security-log interfaces with a reviewed technical permission
-  allowlist. ADMIN currently has no technical operation grants or endpoints.
+See [developer identity and recovery](developer-identity-recovery.md). Technical
+identities have no Employee record, receive only the explicit technical recovery
+permission, and are excluded from business account pages. The operator-only
+DeveloperAdminCommand provisions them after V15. No automatic account is created.
+Verified-email recovery uses single-use hashed challenges and revokes old bearer
+tokens on password reset. Delivery is disabled until SMTP and the client recovery
+page are configured; this is not a claim of production delivery readiness.
+
+## Still outside this implementation
+
+- Separate technical account metadata, standalone session revocation and technical lock/unlock APIs.
+- Redacted health/security-log interfaces and other maintenance operations.
+- Recovery frontend, SMTP deployment, verified email enrollment for real users,
+  gateway abuse controls and PostgreSQL V15 end-to-end validation.
 - Owner-managed cashier permission configuration and other-module permission mapping.
 
 Technical support must not let an administrator impersonate the owner or grant

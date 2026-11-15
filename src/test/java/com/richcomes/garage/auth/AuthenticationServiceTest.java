@@ -47,7 +47,7 @@ class AuthenticationServiceTest {
     @Test
     void successfulLoginIssuesTokenForAccountId() {
         var expected = new LoginResponse("token", "Bearer", 900);
-        when(tokens.issue(42L)).thenReturn(expected);
+        when(tokens.issue(42L, 0)).thenReturn(expected);
         assertEquals(expected, service.login(request));
         verify(accounts).findByUsername("cashier.one");
     }

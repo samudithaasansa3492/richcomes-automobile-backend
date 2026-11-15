@@ -10,6 +10,32 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class IdentityModelTest {
     @Test
+    void independentDeveloperHasOnlyExplicitTechnicalAuthority() {
+        var admin = new Role("ADMIN", "Developer");
+        admin.grantPermission(new Permission("employee:read", "Accidental business grant"));
+        var account = UserAccount.technical("developer.one", "encoded-hash", admin);
+        account.enable();
+        assertNull(account.getEmployee());
+        assertTrue(account.isTechnical());
+        assertTrue(com.richcomes.garage.auth.security.AccountAccessPolicy.canAuthenticate(account));
+        assertEquals(java.util.Set.of("technical:recovery"),
+                com.richcomes.garage.auth.security.AccountAccessPolicy.effectivePermissions(account));
+        account.assignRole(new Role("OWNER", "Forbidden mixed role"));
+        assertFalse(com.richcomes.garage.auth.security.AccountAccessPolicy.canAuthenticate(account));
+        assertTrue(com.richcomes.garage.auth.security.AccountAccessPolicy.effectivePermissions(account).isEmpty());
+    }
+
+    @Test
+    void recoveredPasswordIncrementsTokenVersion() {
+        var account = UserAccount.technical("developer.one", "old-hash", new Role("ADMIN", "Developer"));
+        account.resetPasswordHash("new-hash");
+        assertEquals(1, account.getCredentialVersion());
+        assertEquals("new-hash", account.getPasswordHash());
+        assertThrows(IllegalArgumentException.class, () -> account.resetPasswordHash(" "));
+        assertEquals(1, account.getCredentialVersion());
+    }
+
+    @Test
     void rejectsInvalidUsernames() {
         assertThrows(IllegalArgumentException.class, () -> UserAccount.normalizeUsername(null));
         for (String input : new String[]{"", "ab", "cash ier", "-cashier", "a".repeat(81)}) {

@@ -51,7 +51,7 @@ public class AuthenticationService {
         if (!matches || account == null || !com.richcomes.garage.auth.security.AccountAccessPolicy.canAuthenticate(account)) {
             throw badCredentials();
         }
-        return tokens.issue(account.getId());
+        return tokens.issue(account.getId(), account.getCredentialVersion());
     }
 
     private BadCredentialsException badCredentials() {

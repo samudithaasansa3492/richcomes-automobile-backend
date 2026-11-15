@@ -18,6 +18,14 @@ public interface UserAccountRepository extends JpaRepository<UserAccount, Long> 
 
     Optional<UserAccount> findByEmployee_Id(UUID employeeId);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select a from UserAccount a where a.id = :id")
+    Optional<UserAccount> lockById(@org.springframework.data.repository.query.Param("id") Long id);
+
+    org.springframework.data.domain.Page<UserAccount> findByIdentityKind(
+            String identityKind, org.springframework.data.domain.Pageable pageable);
+
+
     @Query("""
             select count(a) from UserAccount a join a.roles r
             where a.enabled = true and a.employee.active = true and r.code = 'OWNER'

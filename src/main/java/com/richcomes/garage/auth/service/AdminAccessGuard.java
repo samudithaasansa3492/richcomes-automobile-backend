@@ -38,7 +38,7 @@ public class AdminAccessGuard {
     }
 
     public void protectOwner(UserAccount account) {
-        if (account.isEnabled() && account.getEmployee().isActive()
+        if (!account.isTechnical() && account.getEmployee() != null && account.isEnabled() && account.getEmployee().isActive()
                 && account.getRoles().stream().anyMatch(role -> "OWNER".equals(role.getCode()))
                 && accounts.countActiveOwners() <= 1) {
             throw new AccountOperationException(LAST_ACTIVE_OWNER, "At least one active owner must remain");

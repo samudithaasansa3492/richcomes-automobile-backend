@@ -32,6 +32,12 @@ public class AccountJwtAuthenticationConverter implements Converter<Jwt, Abstrac
         if (!AccountAccessPolicy.canAuthenticate(account)) {
             throw invalidToken();
         }
+        // Legacy pre-V15 tokens are accepted only until the first credential revocation.
+        Object version = jwt.getClaims().get("cv");
+        try {
+            long tokenVersion = version == null ? 0 : Long.parseLong(version.toString());
+            if (tokenVersion < 0 || tokenVersion != account.getCredentialVersion()) throw invalidToken();
+        } catch (NumberFormatException exception) { throw invalidToken(); }
         var principal = AccountPrincipal.from(account);
         // Token role claims are deliberately ignored; use current DB permissions each request.
         var authorities = principal.permissions().stream().map(SimpleGrantedAuthority::new).toList();

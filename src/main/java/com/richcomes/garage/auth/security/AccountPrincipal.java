@@ -17,7 +17,7 @@ public record AccountPrincipal(Long accountId, UUID employeeId, String username,
     }
 
     public static AccountPrincipal from(UserAccount account) {
-        return new AccountPrincipal(account.getId(), account.getEmployee().getId(), account.getUsername(),
+        return new AccountPrincipal(account.getId(), account.getEmployee() == null ? null : account.getEmployee().getId(), account.getUsername(),
                 account.getRoles().stream().map(Role::getCode).collect(Collectors.toSet()),
                 AccountAccessPolicy.effectivePermissions(account));
     }

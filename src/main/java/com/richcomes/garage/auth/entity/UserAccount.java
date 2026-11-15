@@ -25,6 +25,7 @@ import java.util.Objects;
 import java.util.Set;
 
 @Entity
+@org.hibernate.annotations.DynamicUpdate
 @Table(name = "user_accounts", schema = "garage")
 public class UserAccount {
 
@@ -32,8 +33,8 @@ public class UserAccount {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "employee_id", nullable = false, unique = true, updatable = false)
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "employee_id", unique = true, updatable = false)
     private Employee employee;
 
     @Column(nullable = false, unique = true, length = 80, updatable = false)
@@ -58,6 +59,47 @@ public class UserAccount {
             inverseJoinColumns = @JoinColumn(name = "role_id", nullable = false),
             uniqueConstraints = @UniqueConstraint(columnNames = {"user_account_id", "role_id"}))
     private Set<Role> roles = new LinkedHashSet<>();
+
+    @org.hibernate.annotations.ColumnDefault("'BUSINESS'")
+    @Column(name = "identity_kind", nullable = false, updatable = false, length = 16)
+    private String identityKind = "BUSINESS";
+
+    @org.hibernate.annotations.ColumnDefault("0")
+    @Column(name = "credential_version", nullable = false)
+    private long credentialVersion;
+
+    @JsonIgnore
+    @Column(name = "recovery_email", length = 254)
+    private String recoveryEmail;
+
+    @JsonIgnore
+    @Column(name = "recovery_last_sent_at")
+    private Instant recoveryLastSentAt;
+
+    public boolean isTechnical() { return "TECHNICAL".equals(identityKind); }
+    public long getCredentialVersion() { return credentialVersion; }
+    @JsonIgnore public String getRecoveryEmail() { return recoveryEmail; }
+    @JsonIgnore public Instant getRecoveryLastSentAt() { return recoveryLastSentAt; }
+    public void recordRecoveryDelivery(Instant time) { recoveryLastSentAt = time; }
+    public void verifyRecoveryEmail(String email) { recoveryEmail = Objects.requireNonNull(email); }
+    public void revokeTokens() { credentialVersion = Math.incrementExact(credentialVersion); }
+    public void resetPasswordHash(String hash) { changePasswordHash(hash); revokeTokens(); }
+
+    /** Operator-only creation; business HTTP APIs never call this factory. */
+    public static UserAccount technical(String username, String hash, Role admin) {
+        if (!"ADMIN".equals(admin.getCode())) throw new IllegalArgumentException("ADMIN role required");
+        var account = new UserAccount();
+        account.identityKind = "TECHNICAL";
+        account.username = normalizeUsername(username);
+        account.changePasswordHash(hash);
+        account.assignRole(admin);
+        return account;
+    }
+
+    @jakarta.persistence.Version
+    @org.hibernate.annotations.ColumnDefault("0")
+    @Column(name = "row_version", nullable = false)
+    private long rowVersion;
 
     protected UserAccount() {
         // Required by JPA.

@@ -22,7 +22,10 @@ public class AccessTokenService {
         this.clock = authClock;
     }
 
-    public LoginResponse issue(Long accountId) {
+    public LoginResponse issue(Long accountId) { return issue(accountId, 0); }
+
+    public LoginResponse issue(Long accountId, long credentialVersion) {
+        if (credentialVersion < 0) throw new IllegalArgumentException("Invalid credential version");
         if (accountId == null || accountId <= 0) {
             throw new IllegalArgumentException("Account ID must be positive");
         }
@@ -30,7 +33,7 @@ public class AccessTokenService {
         var claims = JwtClaimsSet.builder().issuer(settings.issuer())
                 .audience(List.of(settings.audience())).subject(accountId.toString())
                 .issuedAt(now).notBefore(now).expiresAt(now.plus(JwtSettings.ACCESS_TOKEN_LIFETIME))
-                .id(UUID.randomUUID().toString()).build();
+                .id(UUID.randomUUID().toString()).claim("cv", credentialVersion).build();
         var header = JwsHeader.with(SignatureAlgorithm.RS256).type("JWT").build();
         String token = encoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();
         return new LoginResponse(token, "Bearer", JwtSettings.ACCESS_TOKEN_LIFETIME.toSeconds());

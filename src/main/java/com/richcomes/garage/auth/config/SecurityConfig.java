@@ -30,7 +30,11 @@ public class SecurityConfig {
                 .oauth2ResourceServer(resource -> resource.authenticationEntryPoint(errors).accessDeniedHandler(errors)
                         .jwt(jwt -> jwt.decoder(decoder).jwtAuthenticationConverter(converter)))
                 .authorizeHttpRequests(access -> access
-                        .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/recovery/request",
+                                "/api/auth/recovery/reset", "/api/auth/recovery/email/confirm").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/recovery/email").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/api/technical/recovery/request")
+                            .hasAuthority("technical:recovery")
                         .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/employees", "/api/employees/{id}")
                             .hasAuthority("employee:read")

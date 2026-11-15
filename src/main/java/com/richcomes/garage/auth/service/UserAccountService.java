@@ -99,7 +99,9 @@ public class UserAccountService {
 
     @Transactional(readOnly = true)
     public AccountResponse getAccount(Long accountId) {
-        return toResponse(findAccount(accountId));
+        var account = findAccount(accountId);
+        requireBusinessTarget(account);
+        return toResponse(account);
     }
 
     @Transactional(readOnly = true)
@@ -108,7 +110,7 @@ public class UserAccountService {
             throw failure(INVALID_REQUEST, "Page must be nonnegative and size must be between 1 and 100");
         }
         // Page roots only; collection fetch joins would paginate in memory.
-        var result = accounts.findAll(PageRequest.of(
+        var result = accounts.findByIdentityKind("BUSINESS", PageRequest.of(
                 page, size, Sort.by("id")));
         return new AccountPageResponse(
                 result.getContent().stream().map(this::toResponse).toList(), page, size,
@@ -185,7 +187,7 @@ public class UserAccountService {
     }
 
     private void requireBusinessTarget(UserAccount account) {
-        if (account.getRoles().stream().anyMatch(role -> "ADMIN".equals(role.getCode()))) {
+        if (account.isTechnical() || account.getRoles().stream().anyMatch(role -> "ADMIN".equals(role.getCode()))) {
             throw failure(TECHNICAL_ACCOUNT_PROTECTED, "Technical accounts cannot be managed through business account APIs");
         }
     }
