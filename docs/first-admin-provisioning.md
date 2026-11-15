@@ -14,7 +14,7 @@ OWNER_ADMIN/TECHNICIAN role model. After V1-V14 the role definitions are:
 | --- | --- |
 | OWNER | employee:read, employee:create, employee:update, employee:deactivate, account:read, account:create, account:manage |
 | CASHIER | None; operational mapping is a separate integration step |
-| ADMIN | None; technical administration endpoints are not implemented yet |
+| ADMIN | No business permission grants; a separate V15 technical identity receives only `technical:recovery` when eligible |
 
 TECHNICIAN is only an Employee position, not a system role. V14 preserves legacy
 owner grants and IDs, disables legacy technician accounts, and refuses ambiguous
@@ -26,7 +26,7 @@ class name is retained for invocation compatibility.
 ## Preconditions
 
 - Java 21 and dependencies built from the approved branch.
-- Original migrations through V14 applied to the specifically approved target database.
+- Original migrations through V14 applied to the specifically approved target database (V15 additionally required for independent technical identities and recovery).
 - An existing active non-technician Employee with no UserAccount, and an unused username.
 - No enabled OWNER account linked to an active Employee.
 - A trusted operator with database privileges to read/lock the necessary rows and insert
@@ -109,14 +109,13 @@ access-changing code must respect the locking protocol to preserve these guarant
 - Selected regression tests plus FirstAdminProvisionerTest, FirstAdminCommandTest and
   ProvisioningTargetTest. H2 tests exercise the command service, transaction rollback and
   concurrent creation, but do not validate PostgreSQL seed SQL or its locking behavior.
-- On isolated PostgreSQL 17.11, original Flyway V1–V14, seed contents and unchanged privileges.
+- On disposable PostgreSQL 17.12, V1–V15 Flyway fresh/upgrade migration and permissions checks passed (see [2026-11-15 validation evidence](validation-evidence-2026-11-15.md)).
 - Re-execute the seed SQL in an isolated test transaction and confirm no duplicate rows,
   no description/extra-grant loss and stable existing IDs; roll back that test transaction.
 - Run the actual console command with synthetic hidden inputs in a PTY, validate enabled
   owner creation, matching PasswordEncoder hash and normal API login. Capture no secrets.
 - Verify refusals for existing active owner, duplicate links/usernames, inactive Employee,
   missing role/permissions and invalid passwords; verify no changes after rejection.
-- Run two provisioning processes against distinct Employee targets with real overlapping
-  PostgreSQL lock waits; exactly one succeeds and one refuses with OWNER_ALREADY_EXISTS.
+- Real PostgreSQL overlapping OWNER provisioning was validated: both requests blocked on the OWNER role row, exactly one succeeded, and one refused with OWNER_ALREADY_EXISTS. See [validation evidence](validation-evidence-2026-11-15.md).
 - Confirm normal application startup never invokes provisioning and cleanup removes only
   test-owned resources. Shared Supabase is outside isolated validation authorization.
