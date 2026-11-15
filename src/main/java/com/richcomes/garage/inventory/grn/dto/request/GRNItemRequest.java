@@ -2,7 +2,7 @@
 package com.richcomes.garage.inventory.grn.dto.request;
 
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
 
 import java.math.BigDecimal;
@@ -12,9 +12,19 @@ public class GRNItemRequest {
     @NotNull(message = "Stock item ID is required")
     private Long stockItemId;
 
+    // Whole numbers and decimal quantities supported.
     @NotNull(message = "Received quantity is required")
-    @Min(value = 1, message = "Quantity must be at least 1")
-    private Integer receivedQuantity;
+    @DecimalMin(
+            value = "0.000",
+            inclusive = false,
+            message = "Received quantity must be greater than zero"
+    )
+    @Digits(
+            integer = 11,
+            fraction = 3,
+            message = "Quantity supports up to 3 decimal places"
+    )
+    private BigDecimal receivedQuantity;
 
     @NotNull(message = "Unit cost is required")
     @DecimalMin(
@@ -34,11 +44,11 @@ public class GRNItemRequest {
         this.stockItemId = stockItemId;
     }
 
-    public Integer getReceivedQuantity() {
+    public BigDecimal getReceivedQuantity() {
         return receivedQuantity;
     }
 
-    public void setReceivedQuantity(Integer receivedQuantity) {
+    public void setReceivedQuantity(BigDecimal receivedQuantity) {
         this.receivedQuantity = receivedQuantity;
     }
 

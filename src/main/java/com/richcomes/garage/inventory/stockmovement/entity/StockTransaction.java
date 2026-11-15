@@ -6,6 +6,7 @@ import com.richcomes.garage.inventory.stockmovement.enums.StockTransactionType;
 
 import jakarta.persistence.*;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -21,17 +22,39 @@ public class StockTransaction {
     private StockItem stockItem;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "transaction_type", nullable = false, length = 30)
+    @Column(
+            name = "transaction_type",
+            nullable = false,
+            length = 30
+    )
     private StockTransactionType transactionType;
 
-    @Column(nullable = false)
-    private Integer quantity;
+    // Decimal quantity support
+    @Column(
+            name = "quantity",
+            nullable = false,
+            precision = 14,
+            scale = 3
+    )
+    private BigDecimal quantity;
 
-    @Column(name = "quantity_before", nullable = false)
-    private Integer quantityBefore;
+    // Quantity before transaction
+    @Column(
+            name = "quantity_before",
+            nullable = false,
+            precision = 14,
+            scale = 3
+    )
+    private BigDecimal quantityBefore;
 
-    @Column(name = "quantity_after", nullable = false)
-    private Integer quantityAfter;
+    // Quantity after transaction
+    @Column(
+            name = "quantity_after",
+            nullable = false,
+            precision = 14,
+            scale = 3
+    )
+    private BigDecimal quantityAfter;
 
     @Column(name = "reference_type", length = 50)
     private String referenceType;
@@ -45,7 +68,11 @@ public class StockTransaction {
     @Column(name = "performed_by")
     private Long performedBy;
 
-    @Column(name = "created_at", nullable = false, updatable = false)
+    @Column(
+            name = "created_at",
+            nullable = false,
+            updatable = false
+    )
     private LocalDateTime createdAt;
 
     public StockTransaction() {
@@ -74,31 +101,32 @@ public class StockTransaction {
         return transactionType;
     }
 
-    public void setTransactionType(StockTransactionType transactionType) {
+    public void setTransactionType(
+            StockTransactionType transactionType) {
         this.transactionType = transactionType;
     }
 
-    public Integer getQuantity() {
+    public BigDecimal getQuantity() {
         return quantity;
     }
 
-    public void setQuantity(Integer quantity) {
+    public void setQuantity(BigDecimal quantity) {
         this.quantity = quantity;
     }
 
-    public Integer getQuantityBefore() {
+    public BigDecimal getQuantityBefore() {
         return quantityBefore;
     }
 
-    public void setQuantityBefore(Integer quantityBefore) {
+    public void setQuantityBefore(BigDecimal quantityBefore) {
         this.quantityBefore = quantityBefore;
     }
 
-    public Integer getQuantityAfter() {
+    public BigDecimal getQuantityAfter() {
         return quantityAfter;
     }
 
-    public void setQuantityAfter(Integer quantityAfter) {
+    public void setQuantityAfter(BigDecimal quantityAfter) {
         this.quantityAfter = quantityAfter;
     }
 

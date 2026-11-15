@@ -15,8 +15,15 @@ public class StockItemResponse {
     private String categoryName;
 
     private String imageUrl;
-    private Integer currentQuantity;
-    private Integer reorderLevel;
+
+    // Measurement unit: PCS, L, ML
+    private String unit;
+
+    // Decimal stock quantity support
+    private BigDecimal currentQuantity;
+
+    // Decimal reorder level support
+    private BigDecimal reorderLevel;
 
     private BigDecimal unitCost;
     private BigDecimal sellingPrice;
@@ -91,19 +98,27 @@ public class StockItemResponse {
         this.imageUrl = imageUrl;
     }
 
-    public Integer getCurrentQuantity() {
+    public String getUnit() {
+        return unit;
+    }
+
+    public void setUnit(String unit) {
+        this.unit = unit;
+    }
+
+    public BigDecimal getCurrentQuantity() {
         return currentQuantity;
     }
 
-    public void setCurrentQuantity(Integer currentQuantity) {
+    public void setCurrentQuantity(BigDecimal currentQuantity) {
         this.currentQuantity = currentQuantity;
     }
 
-    public Integer getReorderLevel() {
+    public BigDecimal getReorderLevel() {
         return reorderLevel;
     }
 
-    public void setReorderLevel(Integer reorderLevel) {
+    public void setReorderLevel(BigDecimal reorderLevel) {
         this.reorderLevel = reorderLevel;
     }
 

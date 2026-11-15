@@ -14,10 +14,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Service
 public class StockMovementService {
+
+    private static final BigDecimal ZERO = BigDecimal.ZERO;
 
     private final StockItemRepository itemRepository;
     private final StockTransactionRepository transactionRepository;
@@ -36,12 +39,12 @@ public class StockMovementService {
     public StockMovementResponse recordMovement(
             StockMovementRequest request) {
 
-        // Validate request before accessing database
+        // Validate request before accessing database.
         if (request == null
                 || request.getStockItemId() == null
+                || request.getStockItemId() <= 0
                 || request.getTransactionType() == null
-                || request.getQuantity() == null
-                || request.getQuantity() <= 0) {
+                || !isValidQuantity(request.getQuantity())) {
 
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -58,10 +61,13 @@ public class StockMovementService {
             );
         }
 
-        StockTransactionType type = request.getTransactionType();
-        int quantity = request.getQuantity();
+        StockTransactionType type =
+                request.getTransactionType();
 
-        // Require reason for damage, wastage and adjustments
+        BigDecimal quantity =
+                request.getQuantity();
+
+        // Require reason for damage, wastage and adjustments.
         if ((type == StockTransactionType.DAMAGE
                 || type == StockTransactionType.WASTAGE
                 || type == StockTransactionType.ADJUSTMENT_IN
@@ -75,7 +81,7 @@ public class StockMovementService {
             );
         }
 
-        // Lock stock item to prevent concurrent quantity changes
+        // Lock stock item to prevent concurrent quantity changes.
         StockItem item = itemRepository
                 .findByIdForUpdate(request.getStockItemId())
                 .orElseThrow(() -> new ResponseStatusException(
@@ -90,46 +96,71 @@ public class StockMovementService {
             );
         }
 
-        Integer currentQuantity = item.getCurrentQuantity();
+        // NEW: Validate quantity according to item unit.
+        validateQuantityForUnit(item, quantity);
 
-        if (currentQuantity == null || currentQuantity < 0) {
+        BigDecimal currentQuantity =
+                item.getCurrentQuantity();
+
+        if (currentQuantity == null
+                || currentQuantity.compareTo(ZERO) < 0
+                || !fitsQuantityColumn(currentQuantity)) {
+
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Invalid current stock quantity"
             );
         }
 
-        int before = currentQuantity;
-        int after;
+        // Prevent fractional existing stock for PCS items.
+        if ("PCS".equals(item.getUnit())
+                && currentQuantity.stripTrailingZeros().scale() > 0) {
 
-        try {
-            after = switch (type) {
-                case STOCK_IN, ADJUSTMENT_IN ->
-                        Math.addExact(before, quantity);
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "PCS item has an invalid fractional stock balance"
+            );
+        }
 
-                case STOCK_OUT, DAMAGE, WASTAGE, ADJUSTMENT_OUT ->
-                        Math.subtractExact(before, quantity);
-            };
-        } catch (ArithmeticException ex) {
+        BigDecimal before = currentQuantity;
+        BigDecimal after;
+
+        // Perform exact decimal calculations.
+        after = switch (type) {
+
+            case STOCK_IN, ADJUSTMENT_IN ->
+                    before.add(quantity);
+
+            case STOCK_OUT, DAMAGE, WASTAGE, ADJUSTMENT_OUT ->
+                    before.subtract(quantity);
+        };
+
+        // Prevent negative inventory.
+        if (after.compareTo(ZERO) < 0) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Insufficient stock. Available: "
+                            + before.toPlainString()
+            );
+        }
+
+        // Check NUMERIC(14,3) supported range.
+        if (!fitsQuantityColumn(after)) {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Stock quantity exceeds supported range"
             );
         }
 
-        if (after < 0) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Insufficient stock. Available: " + before
-            );
-        }
-
-        // Update current stock quantity
+        // Update current stock quantity.
         item.setCurrentQuantity(after);
         itemRepository.saveAndFlush(item);
 
-        // Record transaction history
-        StockTransaction transaction = new StockTransaction();
+        // Record transaction history.
+        StockTransaction transaction =
+                new StockTransaction();
 
         transaction.setStockItem(item);
         transaction.setTransactionType(type);
@@ -163,9 +194,11 @@ public class StockMovementService {
 
     // GET TRANSACTION HISTORY FOR ONE STOCK ITEM
     @Transactional(readOnly = true)
-    public List<StockMovementResponse> getItemTransactions(Long itemId) {
+    public List<StockMovementResponse> getItemTransactions(
+            Long itemId) {
 
         if (itemId == null || itemId <= 0) {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Valid stock item ID is required"
@@ -173,6 +206,7 @@ public class StockMovementService {
         }
 
         if (!itemRepository.existsById(itemId)) {
+
             throw new ResponseStatusException(
                     HttpStatus.NOT_FOUND,
                     "Stock item not found"
@@ -184,6 +218,74 @@ public class StockMovementService {
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
+    }
+
+    // VALIDATE QUANTITY AGAINST STOCK ITEM UNIT
+    private void validateQuantityForUnit(
+            StockItem item,
+            BigDecimal quantity) {
+
+        if (!isValidQuantity(quantity)) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invalid stock movement quantity"
+            );
+        }
+
+        String unit = item.getUnit();
+
+        if ("PCS".equals(unit)) {
+
+            // 5 or 5.000 = valid whole number.
+            // 1.5 = invalid for PCS.
+            if (quantity.stripTrailingZeros().scale() > 0) {
+
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "PCS items require whole-number quantities"
+                );
+            }
+
+        } else if (!"L".equals(unit)
+                && !"ML".equals(unit)) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Stock item has an invalid measurement unit"
+            );
+        }
+    }
+
+    // VALIDATE POSITIVE QUANTITY
+    private boolean isValidQuantity(BigDecimal quantity) {
+
+        return quantity != null
+                && quantity.compareTo(ZERO) > 0
+                && fitsQuantityColumn(quantity);
+    }
+
+    // VALIDATE NUMERIC(14,3)
+    private boolean fitsQuantityColumn(BigDecimal quantity) {
+
+        if (quantity == null) {
+            return false;
+        }
+
+        BigDecimal normalized =
+                quantity.stripTrailingZeros();
+
+        int fractionDigits =
+                Math.max(0, normalized.scale());
+
+        int integerDigits =
+                Math.max(
+                        0,
+                        normalized.precision() - normalized.scale()
+                );
+
+        return fractionDigits <= 3
+                && integerDigits <= 11;
     }
 
     // CONVERT ENTITY TO RESPONSE DTO
@@ -204,10 +306,14 @@ public class StockMovementService {
                 transaction.getTransactionType()
         );
 
-        response.setQuantity(transaction.getQuantity());
+        response.setQuantity(
+                transaction.getQuantity()
+        );
+
         response.setQuantityBefore(
                 transaction.getQuantityBefore()
         );
+
         response.setQuantityAfter(
                 transaction.getQuantityAfter()
         );
@@ -215,6 +321,7 @@ public class StockMovementService {
         response.setReferenceType(
                 transaction.getReferenceType()
         );
+
         response.setReferenceId(
                 transaction.getReferenceId()
         );

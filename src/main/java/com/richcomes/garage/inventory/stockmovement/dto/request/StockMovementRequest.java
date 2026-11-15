@@ -2,9 +2,13 @@
 package com.richcomes.garage.inventory.stockmovement.dto.request;
 
 import com.richcomes.garage.inventory.stockmovement.enums.StockTransactionType;
-import jakarta.validation.constraints.Min;
+
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+
+import java.math.BigDecimal;
 
 public class StockMovementRequest {
 
@@ -14,9 +18,19 @@ public class StockMovementRequest {
     @NotNull(message = "Transaction type is required")
     private StockTransactionType transactionType;
 
+    // Supports both whole-number and decimal quantities
     @NotNull(message = "Quantity is required")
-    @Min(value = 1, message = "Quantity must be greater than zero")
-    private Integer quantity;
+    @DecimalMin(
+            value = "0.000",
+            inclusive = false,
+            message = "Quantity must be greater than zero"
+    )
+    @Digits(
+            integer = 11,
+            fraction = 3,
+            message = "Quantity supports up to 3 decimal places"
+    )
+    private BigDecimal quantity;
 
     @Size(max = 500)
     private String reason;
@@ -41,11 +55,11 @@ public class StockMovementRequest {
         this.transactionType = transactionType;
     }
 
-    public Integer getQuantity() {
+    public BigDecimal getQuantity() {
         return quantity;
     }
 
-    public void setQuantity(Integer quantity) {
+    public void setQuantity(BigDecimal quantity) {
         this.quantity = quantity;
     }
 
@@ -56,5 +70,4 @@ public class StockMovementRequest {
     public void setReason(String reason) {
         this.reason = reason;
     }
-
 }

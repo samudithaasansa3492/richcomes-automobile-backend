@@ -13,7 +13,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.util.List;
+import java.util.Locale;
 
 @Service
 public class StockItemService {
@@ -33,6 +35,8 @@ public class StockItemService {
     @Transactional
     public StockItemResponse createItem(StockItemRequest request) {
 
+        validateRequest(request);
+
         String itemCode = request.getItemCode().trim();
         String barcode = normalizeBarcode(request.getBarcode());
 
@@ -43,22 +47,24 @@ public class StockItemService {
             );
         }
 
-        if (barcode != null &&
-                itemRepository.existsByBarcode(barcode)) {
+        if (barcode != null
+                && itemRepository.existsByBarcode(barcode)) {
+
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Barcode already exists"
             );
         }
 
-        StockCategory category = findActiveCategory(
-                request.getCategoryId()
-        );
+        StockCategory category =
+                findActiveCategory(request.getCategoryId());
 
         StockItem item = new StockItem();
 
         applyRequest(item, request, category);
-        item.setCurrentQuantity(0);
+
+        // Stock is added only through GRN or stock movement.
+        item.setCurrentQuantity(BigDecimal.ZERO);
 
         return mapToResponse(itemRepository.save(item));
     }
@@ -104,9 +110,57 @@ public class StockItemService {
 
         return itemRepository.findByActiveTrue()
                 .stream()
+                .filter(this::isLowStock)
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    // GET ITEM BY CODE
+    @Transactional(readOnly = true)
+    public StockItemResponse getItemByCode(String itemCode) {
+
+        if (itemCode == null || itemCode.isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Valid stock item code is required"
+            );
+        }
+
+        StockItem item = itemRepository
+                .findByItemCode(itemCode.trim())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Stock item not found"
+                ));
+
+        return mapToResponse(item);
+    }
+
+    // SEARCH ITEMS BY NAME
+    @Transactional(readOnly = true)
+    public List<StockItemResponse> searchItemsByName(
+            String itemName) {
+
+        if (itemName == null
+                || itemName.isBlank()
+                || itemName.trim().length() < 2) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Item name must contain at least 2 characters"
+            );
+        }
+
+        String searchText =
+                itemName.trim().toLowerCase(Locale.ROOT);
+
+        return itemRepository.findAll()
+                .stream()
                 .filter(item ->
-                        item.getCurrentQuantity()
-                                <= item.getReorderLevel()
+                        item.getItemName() != null
+                                && item.getItemName()
+                                .toLowerCase(Locale.ROOT)
+                                .contains(searchText)
                 )
                 .map(this::mapToResponse)
                 .toList();
@@ -117,6 +171,8 @@ public class StockItemService {
     public StockItemResponse updateItem(
             Long id,
             StockItemRequest request) {
+
+        validateRequest(request);
 
         StockItem item = findItem(id);
 
@@ -145,9 +201,26 @@ public class StockItemService {
                     });
         }
 
-        StockCategory category = findActiveCategory(
-                request.getCategoryId()
-        );
+        String newUnit = request.getUnit();
+
+        String existingUnit = item.getUnit();
+
+        // Do not reinterpret existing stock quantities
+        // by changing measurement units.
+        if (existingUnit != null
+                && !existingUnit.equals(newUnit)
+                && item.getCurrentQuantity() != null
+                && item.getCurrentQuantity()
+                .compareTo(BigDecimal.ZERO) != 0) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Cannot change unit while stock quantity is not zero"
+            );
+        }
+
+        StockCategory category =
+                findActiveCategory(request.getCategoryId());
 
         applyRequest(item, request, category);
 
@@ -181,10 +254,143 @@ public class StockItemService {
         itemRepository.save(item);
     }
 
+    // VALIDATE ITEM REQUEST AND UNIT
+    private void validateRequest(StockItemRequest request) {
+
+        if (request == null
+                || request.getItemCode() == null
+                || request.getItemCode().isBlank()
+                || request.getItemName() == null
+                || request.getItemName().isBlank()) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Item code and item name are required"
+            );
+        }
+
+        if (request.getItemCode().trim().length() > 50
+                || request.getItemName().trim().length() > 150) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Item code or item name exceeds maximum length"
+            );
+        }
+
+        String unit = request.getUnit();
+
+        if (!"PCS".equals(unit)
+                && !"L".equals(unit)
+                && !"ML".equals(unit)) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Unit must be PCS, L or ML"
+            );
+        }
+
+        BigDecimal reorderLevel = request.getReorderLevel();
+
+        if (reorderLevel == null
+                || reorderLevel.compareTo(BigDecimal.ZERO) < 0
+                || !fitsQuantityColumn(reorderLevel)) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invalid reorder level"
+            );
+        }
+
+        // PCS products cannot have fractional reorder levels.
+        if ("PCS".equals(unit)
+                && reorderLevel.stripTrailingZeros().scale() > 0) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "PCS reorder level must be a whole number"
+            );
+        }
+
+        if (!isValidMoney(request.getUnitCost())
+                || !isValidMoney(request.getSellingPrice())) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invalid unit cost or selling price"
+            );
+        }
+
+        if (request.getBarcode() != null
+                && request.getBarcode().length() > 100) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Barcode exceeds 100 characters"
+            );
+        }
+
+        if (request.getDescription() != null
+                && request.getDescription().length() > 500) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Description exceeds 500 characters"
+            );
+        }
+
+        if (request.getImageUrl() != null
+                && request.getImageUrl().length() > 500) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Image URL exceeds 500 characters"
+            );
+        }
+    }
+
+    // VALIDATE NUMERIC(14,3)
+    private boolean fitsQuantityColumn(BigDecimal quantity) {
+
+        if (quantity == null) {
+            return false;
+        }
+
+        BigDecimal normalized = quantity.stripTrailingZeros();
+
+        int fractionDigits = Math.max(0, normalized.scale());
+
+        int integerDigits = Math.max(
+                0,
+                normalized.precision() - normalized.scale()
+        );
+
+        return fractionDigits <= 3 && integerDigits <= 11;
+    }
+
+    // VALIDATE NUMERIC(12,2)
+    private boolean isValidMoney(BigDecimal amount) {
+
+        if (amount == null
+                || amount.compareTo(BigDecimal.ZERO) < 0) {
+            return false;
+        }
+
+        BigDecimal normalized = amount.stripTrailingZeros();
+
+        int fractionDigits = Math.max(0, normalized.scale());
+
+        int integerDigits = Math.max(
+                0,
+                normalized.precision() - normalized.scale()
+        );
+
+        return fractionDigits <= 2 && integerDigits <= 10;
+    }
+
     // FIND ITEM
     private StockItem findItem(Long id) {
 
-        // Validate ID before database lookup.
         if (id == null || id <= 0) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -193,18 +399,15 @@ public class StockItemService {
         }
 
         return itemRepository.findById(id)
-                .orElseThrow(() ->
-                        new ResponseStatusException(
-                                HttpStatus.NOT_FOUND,
-                                "Stock item not found"
-                        )
-                );
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Stock item not found"
+                ));
     }
 
     // FIND ACTIVE CATEGORY
     private StockCategory findActiveCategory(Long id) {
 
-        // Validate ID before database lookup.
         if (id == null || id <= 0) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
@@ -213,12 +416,10 @@ public class StockItemService {
         }
 
         StockCategory category = categoryRepository.findById(id)
-                .orElseThrow(() ->
-                        new ResponseStatusException(
-                                HttpStatus.NOT_FOUND,
-                                "Stock category not found"
-                        )
-                );
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND,
+                        "Stock category not found"
+                ));
 
         if (!category.isActive()) {
             throw new ResponseStatusException(
@@ -230,7 +431,7 @@ public class StockItemService {
         return category;
     }
 
-    // SET ITEM DETAILS
+    // APPLY STOCK ITEM REQUEST
     private void applyRequest(
             StockItem item,
             StockItemRequest request,
@@ -242,6 +443,10 @@ public class StockItemService {
         item.setDescription(request.getDescription());
         item.setCategory(category);
         item.setImageUrl(request.getImageUrl());
+
+        // NEW: Store measurement unit.
+        item.setUnit(request.getUnit());
+
         item.setReorderLevel(request.getReorderLevel());
         item.setUnitCost(request.getUnitCost());
         item.setSellingPrice(request.getSellingPrice());
@@ -255,6 +460,19 @@ public class StockItemService {
         }
 
         return barcode.trim();
+    }
+
+    // CHECK LOW STOCK
+    private boolean isLowStock(StockItem item) {
+
+        BigDecimal currentQuantity = item.getCurrentQuantity();
+        BigDecimal reorderLevel = item.getReorderLevel();
+
+        if (currentQuantity == null || reorderLevel == null) {
+            return false;
+        }
+
+        return currentQuantity.compareTo(reorderLevel) <= 0;
     }
 
     // ENTITY TO RESPONSE DTO
@@ -272,6 +490,10 @@ public class StockItemService {
         response.setCategoryName(item.getCategory().getName());
 
         response.setImageUrl(item.getImageUrl());
+
+        // NEW: Include unit in API response.
+        response.setUnit(item.getUnit());
+
         response.setCurrentQuantity(item.getCurrentQuantity());
         response.setReorderLevel(item.getReorderLevel());
 
@@ -279,11 +501,7 @@ public class StockItemService {
         response.setSellingPrice(item.getSellingPrice());
 
         response.setActive(item.isActive());
-
-        response.setLowStock(
-                item.isActive() &&
-                        item.getCurrentQuantity() <= item.getReorderLevel()
-        );
+        response.setLowStock(item.isActive() && isLowStock(item));
 
         return response;
     }

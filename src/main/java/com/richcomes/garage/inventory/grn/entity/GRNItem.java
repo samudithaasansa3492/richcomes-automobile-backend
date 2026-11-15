@@ -22,10 +22,21 @@ public class GRNItem {
     @JoinColumn(name = "stock_item_id", nullable = false)
     private StockItem stockItem;
 
-    @Column(name = "received_quantity", nullable = false)
-    private Integer receivedQuantity;
+    // Supports whole-number and decimal quantities
+    @Column(
+            name = "received_quantity",
+            nullable = false,
+            precision = 14,
+            scale = 3
+    )
+    private BigDecimal receivedQuantity;
 
-    @Column(name = "unit_cost", nullable = false, precision = 12, scale = 2)
+    @Column(
+            name = "unit_cost",
+            nullable = false,
+            precision = 12,
+            scale = 2
+    )
     private BigDecimal unitCost;
 
     public GRNItem() {
@@ -51,11 +62,11 @@ public class GRNItem {
         this.stockItem = stockItem;
     }
 
-    public Integer getReceivedQuantity() {
+    public BigDecimal getReceivedQuantity() {
         return receivedQuantity;
     }
 
-    public void setReceivedQuantity(Integer receivedQuantity) {
+    public void setReceivedQuantity(BigDecimal receivedQuantity) {
         this.receivedQuantity = receivedQuantity;
     }
 
