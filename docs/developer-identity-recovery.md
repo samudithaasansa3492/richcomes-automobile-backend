@@ -104,12 +104,18 @@ deployment work, not performed by this backend change.
 
 ## Validation status
 
-Implementation is prepared but not validated by execution: local Maven compilation
-stopped while resolving the Spring Boot parent POM because Maven Central DNS was
-unavailable. No claim of compilation, H2, V15 PostgreSQL, PTY or SMTP success is made.
-Java 21 parse-only syntax, POM XML syntax, Python validator syntax and git diff
-whitespace checks passed. These checks do not perform Java type checking or run tests.
-Previous PR #21 evidence applies to V14 only.
+Codespaces validation of commit `2b39df1` compiled successfully on Java 21.
+The user-supplied diagnosis reported 153 tests, zero assertion failures, 39 errors
+and zero skips. Recovery setup reused a unique role code before queued deletes
+were flushed; the security MVC context also attempted persistence-field injection
+on its mocked RecoveryService without an EntityManagerFactory.
+
+The follow-up flushes fixture cleanup before inserting roles and moves the service's
+EntityManager dependency to constructor injection, so a mocked service has no
+persistence injection point. These corrections still require selected-test rerun;
+no claim of passing tests or PostgreSQL V15/SMTP/PTY validation is made.
+Java parse-only syntax, POM/Python syntax and whitespace checks do not establish
+Java type checking or runtime correctness. Prior PR #21 evidence applies to V14 only.
 
 Run `python3 scripts/validate-developer-recovery.py <reviewed-full-commit-sha>` in a
 clean checkout with Java 21. This compiles, runs the named auth/provisioning/recovery

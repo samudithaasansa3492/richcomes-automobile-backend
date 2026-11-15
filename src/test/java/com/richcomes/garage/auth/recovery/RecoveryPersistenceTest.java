@@ -48,6 +48,8 @@ class RecoveryPersistenceTest {
         clock.now.set(Instant.parse("2026-11-15T00:00:00Z"));
         tx.executeWithoutResult(status -> {
             challenges.deleteAll(); audit.deleteAll(); accounts.deleteAll(); roles.deleteAll();
+            // Hibernate queues deletes after inserts. Flush cleanup before reusing unique role codes.
+            roles.flush();
             var role = roles.saveAndFlush(new Role("ADMIN", "Developer"));
             var account = UserAccount.technical("developer.one", encoder.encode(PASSWORD), role);
             account.enable(); accountId = accounts.saveAndFlush(account).getId();

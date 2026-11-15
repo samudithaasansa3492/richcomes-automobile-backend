@@ -22,13 +22,14 @@ public class RecoveryService {
     private final PasswordEncoder encoder;
     private final RecoveryDelivery delivery;
     private final Clock clock;
-    @jakarta.persistence.PersistenceContext
-    private jakarta.persistence.EntityManager entityManager;
+    private final jakarta.persistence.EntityManager entityManager;
     private final SecureRandom random = new SecureRandom();
     public RecoveryService(UserAccountRepository accounts, RecoveryChallengeRepository challenges,
-            SecurityAuditRepository audit, PasswordEncoder encoder, RecoveryDelivery delivery, Clock authClock) {
+            SecurityAuditRepository audit, PasswordEncoder encoder, RecoveryDelivery delivery, Clock authClock,
+            jakarta.persistence.EntityManager entityManager) {
         this.accounts = accounts; this.challenges = challenges; this.audit = audit;
         this.encoder = encoder; this.delivery = delivery; this.clock = authClock;
+        this.entityManager = entityManager;
     }
 
     public void enroll(Long accountId, String password, String email) {
