@@ -104,24 +104,17 @@ deployment work, not performed by this backend change.
 
 ## Validation status
 
-Codespaces validation of commit `2b39df1` compiled successfully on Java 21.
-The user-supplied diagnosis reported 153 tests, zero assertion failures, 39 errors
-and zero skips. Recovery setup reused a unique role code before queued deletes
-were flushed; the security MVC context also attempted persistence-field injection
-on its mocked RecoveryService without an EntityManagerFactory.
+**Validated against source commit `7e26ebc57dad29fdfc11a291551319fffa2c7d8a` on 2026-11-15.**
+See [isolated validation evidence](validation-evidence-2026-11-15.md) for observed checks, precise boundaries and rollout limitations. These results supersede the earlier pre-fix validation notes for commit `2b39df1`.
 
-The follow-up flushes fixture cleanup before inserting roles and moves the service's
-EntityManager dependency to constructor injection, so a mocked service has no
-persistence injection point. These corrections still require selected-test rerun;
-no claim of passing tests or PostgreSQL V15/SMTP/PTY validation is made.
-Java parse-only syntax, POM/Python syntax and whitespace checks do not establish
-Java type checking or runtime correctness. Prior PR #21 evidence applies to V14 only.
+- Java 21 compilation and 153 selected tests: **passed**, zero failures/errors/skips, using `scripts/validate-developer-recovery.py`.
+- Disposable PostgreSQL 17.12: V1–V15 Flyway fresh and legacy upgrade validation; identity/RLS constraints and seed checks **passed**.
+- Real interactive technical ADMIN provisioning and duplicate refusal; real HTTP login, technical/business separation, JWT revocation **passed**.
+- Recovery transactions on PostgreSQL: single-use token concurrency, delivery rollback, verified-email logic **passed**.
+- HTTP recovery disabled and enabled flows, including email confirmation, cooldown, reset and JWT revocation **passed** with capture-only mail delivery.
+- Local STARTTLS transport: trusted TLS delivered; untrusted certificate and missing STARTTLS were rejected. Real provider-specific email delivery **not yet validated**.
+- PostgreSQL OWNER provisioning race and last-active-OWNER access-removal race **passed** with observed blocking locks.
 
-Run `python3 scripts/validate-developer-recovery.py <reviewed-full-commit-sha>` in a
-clean checkout with Java 21. This compiles, runs the named auth/provisioning/recovery
-classes only and retains a plain-text summary outside the repository so a terminal
-reload does not lose it. It never starts the real application or connects to shared
-Supabase. H2 covers transactions/replay, not PostgreSQL lock behavior or V15 grants.
-Before integration, independently validate fresh/upgrade V15, real PTY provisioning,
-actual HTTP boundaries, old-token revocation, simultaneous redemption and delivery
-rollback against disposable PostgreSQL with a private capture-only mail transport.
+These were developer-supplied Codespaces outputs, including temporary one-off integration harnesses, not a statement that all checks are checked into CI or that shared Supabase has been changed. **Production release still requires explicit schema approval, migration/data review, deployment configuration, frontend integration, abuse controls, external SMTP verification, CI and operational review.**
+
+Run `python3 scripts/validate-developer-recovery.py <reviewed-full-commit-sha>` in a clean Java 21 checkout to reproduce the selected regression suite. Before production, repeat applicable integration tests against an approved nonproduction environment. Never use the shared Supabase database to replay disposable-test setup.
