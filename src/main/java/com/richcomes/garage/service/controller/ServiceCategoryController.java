@@ -20,31 +20,31 @@ public class ServiceCategoryController {
         this.service = service;
     }
 
-    // අලුත් Category එකක් සෑදීමට (POST Request)
+    // (POST Request)
     @PostMapping
     public ResponseEntity<ServiceCategoryDTO> createCategory(@RequestBody ServiceCategoryDTO categoryDTO) {
         return ResponseEntity.ok(service.createCategory(categoryDTO));
     }
 
-    // සියලුම Categories බැලීමට (GET Request)
+    //  (GET Request)
     @GetMapping
     public ResponseEntity<List<ServiceCategoryDTO>> getAllCategories() {
         return ResponseEntity.ok(service.getAllCategories());
     }
 
-    // ID එක මගින් එක Category එකක් සෙවීමට (GET Request)
+    // ID(GET Request)
     @GetMapping("/{id}")
     public ResponseEntity<ServiceCategoryDTO> getCategoryById(@PathVariable Long id) {
         return ResponseEntity.ok(service.getCategoryById(id));
     }
 
-    // Category එකක් වෙනස් කිරීමට (PUT Request)
+    // Category(PUT Request)
     @PutMapping("/{id}")
     public ResponseEntity<ServiceCategoryDTO> updateCategory(@PathVariable Long id, @RequestBody ServiceCategoryDTO categoryDTO) {
         return ResponseEntity.ok(service.updateCategory(id, categoryDTO));
     }
 
-    // Category එකක් මකා දැමීමට (DELETE Request)
+    // Category(DELETE Request)
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteCategory(@PathVariable Long id) {
         service.deleteCategory(id);

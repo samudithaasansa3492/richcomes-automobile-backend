@@ -6,5 +6,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface ServiceCategoryRepository extends JpaRepository<ServiceCategory, Long> {
-    // Spring Data JPA මගින් මූලික CRUD ක්‍රියාකාරකම් (Save, Find, Delete) ඉබේම ලබා දෙයි
+
 }

@@ -11,12 +11,12 @@ public class ServiceJobItem {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // ප්‍රධාන Job Card එකට සම්බන්ධ කිරීම
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "service_job_id", nullable = false)
     private ServiceJob serviceJob;
 
-    // සිදුකරන සේවාවට (Service Item) සම්බන්ධ කිරීම
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "service_item_id", nullable = false)
     private ServiceItem serviceItem;

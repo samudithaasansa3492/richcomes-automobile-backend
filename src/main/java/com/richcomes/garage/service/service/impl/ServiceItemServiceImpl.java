@@ -24,7 +24,7 @@ public class ServiceItemServiceImpl implements ServiceItemService {
         this.categoryRepository = categoryRepository;
     }
 
-    // Helper Method: Entity එක DTO එකකට හැරවීම
+
     private ServiceItemDTO convertToDTO(ServiceItem entity) {
         ServiceItemDTO dto = new ServiceItemDTO();
         dto.setId(entity.getId());
@@ -41,7 +41,6 @@ public class ServiceItemServiceImpl implements ServiceItemService {
         return dto;
     }
 
-    // Helper Method: DTO එක Entity එකකට හැරවීම
     private ServiceItem convertToEntity(ServiceItemDTO dto) {
         ServiceItem entity = new ServiceItem();
         entity.setId(dto.getId());

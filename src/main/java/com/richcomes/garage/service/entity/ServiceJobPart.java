@@ -4,19 +4,19 @@ import jakarta.persistence.*;
 import java.math.BigDecimal;
 
 @Entity
-@Table(name = "service_job_parts")
+@Table(name = "service_job_parts", schema = "garage")
 public class ServiceJobPart {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // ප්‍රධාන Job Card එකට සම්බන්ධ කිරීම
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "service_job_id", nullable = false)
     private ServiceJob serviceJob;
 
-    // Inventory (Member 4) හි ඇති Part ID එක ගබඩා කිරීම
+
     @Column(name = "part_id", nullable = false)
     private Long partId;
 
