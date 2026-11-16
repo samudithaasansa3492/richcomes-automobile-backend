@@ -55,6 +55,42 @@ class CustomerRegistrationDelegationServiceTest {
         verify(accounts, times(2)).saveAndFlush(cashier);
     }
 
+    @Test void disabledOrInactiveCashierCannotReceiveARegistrationGrant() {
+        when(accounts.findOneById(7L)).thenReturn(Optional.of(cashier));
+        cashier.disable();
+        var disabled = assertThrows(AccountOperationException.class,
+                () -> service.setAllowed(7L, true, owner));
+        assertEquals(AccountOperationException.Code.CASHIER_NOT_ELIGIBLE, disabled.getCode());
+
+        cashier.enable();
+        cashier.getEmployee().setActive(false);
+        var inactive = assertThrows(AccountOperationException.class,
+                () -> service.setAllowed(7L, true, owner));
+        assertEquals(AccountOperationException.Code.CASHIER_NOT_ELIGIBLE, inactive.getCode());
+        verifyNoInteractions(definitions, audit);
+        verify(accounts, never()).saveAndFlush(any());
+        assertTrue(cashier.getDirectPermissions().isEmpty());
+    }
+
+    @Test void ownerCanRevokeRegistrationFromDisabledCashierWithoutCatalogLookup() {
+        cashier.grantDirectPermission(registration);
+        cashier.disable();
+        when(accounts.findOneById(7L)).thenReturn(Optional.of(cashier));
+        var revoked = service.setAllowed(7L, false, owner);
+        assertFalse(revoked.registrationPermitted());
+        assertTrue(cashier.getDirectPermissions().isEmpty());
+        verifyNoInteractions(definitions);
+        verify(accounts).saveAndFlush(cashier);
+        verify(audit).save(any());
+    }
+
+    @Test void revokingAlreadyAbsentRegistrationIsIdempotent() {
+        when(accounts.findOneById(7L)).thenReturn(Optional.of(cashier));
+        assertFalse(service.setAllowed(7L, false, owner).registrationPermitted());
+        verifyNoInteractions(definitions, audit);
+        verify(accounts, never()).saveAndFlush(any());
+    }
+
     @Test void cashierCannotGrantItselfRegistrationAuthority() {
         AccountPrincipal ordinaryCashier = new AccountPrincipal(7L, null, "cashier.one",
                 Set.of("CASHIER"), Set.of());
