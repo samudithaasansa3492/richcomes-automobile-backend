@@ -21,8 +21,6 @@ public class ServiceJob {
     @Column(name = "customer_id")
     private Long customerId;
 
-    @Column(name = "branch_id")
-    private Long branchId;
 
     @Column(name = "assigned_employee_id")
     private Long assignedEmployeeId;
@@ -68,8 +66,6 @@ public class ServiceJob {
     public Long getCustomerId() { return customerId; }
     public void setCustomerId(Long customerId) { this.customerId = customerId; }
 
-    public Long getBranchId() { return branchId; }
-    public void setBranchId(Long branchId) { this.branchId = branchId; }
 
     public Long getAssignedEmployeeId() { return assignedEmployeeId; }
     public void setAssignedEmployeeId(Long assignedEmployeeId) { this.assignedEmployeeId = assignedEmployeeId; }

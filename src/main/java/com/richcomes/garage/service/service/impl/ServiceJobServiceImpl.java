@@ -27,7 +27,6 @@ public class ServiceJobServiceImpl implements ServiceJobService {
         dto.setJobNo(entity.getJobNo());
         dto.setVehicleId(entity.getVehicleId());
         dto.setCustomerId(entity.getCustomerId());
-        dto.setBranchId(entity.getBranchId());
         dto.setAssignedEmployeeId(entity.getAssignedEmployeeId());
         if (entity.getStatus() != null) {
             dto.setStatus(entity.getStatus().name());
@@ -46,7 +45,6 @@ public class ServiceJobServiceImpl implements ServiceJobService {
         entity.setJobNo(dto.getJobNo());
         entity.setVehicleId(dto.getVehicleId());
         entity.setCustomerId(dto.getCustomerId());
-        entity.setBranchId(dto.getBranchId());
         entity.setAssignedEmployeeId(dto.getAssignedEmployeeId());
         if (dto.getStatus() != null) {
             entity.setStatus(ServiceJob.JobStatus.valueOf(dto.getStatus()));
