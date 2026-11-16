@@ -58,15 +58,25 @@ public class CustomerRegistrationDelegationService {
             throw failure(CASHIER_NOT_ELIGIBLE, "Only a CASHIER account may receive registration permission");
         }
 
-        var permission = permissions.findByCode("customer:register")
-                .orElseThrow(() -> failure(CUSTOMER_ROLE_NOT_CONFIGURED, "Customer registration permission not configured"));
-        boolean alreadyAllowed = cashier.getDirectPermissions().stream()
-                .anyMatch(existing -> "customer:register".equals(existing.getCode()));
-        if (alreadyAllowed != allowed) {
+        // Disabled or inactive staff must never be pre-granted registration:
+        // otherwise enabling the same account could silently restore access.
+        if (allowed && (!cashier.isEnabled() || !cashier.getEmployee().isActive())) {
+            throw failure(CASHIER_NOT_ELIGIBLE,
+                    "Only an active, enabled CASHIER may receive registration permission");
+        }
+        var existingGrant = cashier.getDirectPermissions().stream()
+                .filter(existing -> "customer:register".equals(existing.getCode()))
+                .findFirst();
+        if (existingGrant.isPresent() != allowed) {
             if (allowed) {
+                var permission = permissions.findByCode("customer:register")
+                        .orElseThrow(() -> failure(CUSTOMER_ROLE_NOT_CONFIGURED,
+                                "Customer registration permission not configured"));
                 cashier.grantDirectPermission(permission);
             } else {
-                cashier.revokeDirectPermission(permission);
+                // Revoke even on inactive staff; removing a grant does not need a
+                // fresh catalog lookup and is idempotent.
+                cashier.revokeDirectPermission(existingGrant.orElseThrow());
             }
             accounts.saveAndFlush(cashier);
             audit.save(new SecurityAuditEvent(actor.accountId(), cashierAccountId,
