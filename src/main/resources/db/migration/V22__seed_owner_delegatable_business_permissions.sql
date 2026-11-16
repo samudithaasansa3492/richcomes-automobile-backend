@@ -43,3 +43,18 @@ ON CONFLICT (role_id, permission_id) DO NOTHING;
 -- Do not grant permission:delegate/audit:read to CASHIER or CUSTOMER.
 -- Do not grant any business permission to technical ADMIN.
 -- Explicit per-account grants are created/revoked only by the reviewed API.
+
+-- Immutable actor and permission details provide proper delegation audit history.
+-- No account deletion cascade: retain historical grant/revoke records.
+CREATE TABLE garage.account_permission_audit (
+    id UUID PRIMARY KEY,
+    actor_id BIGINT NOT NULL,
+    target_account_id BIGINT NOT NULL,
+    permission_code VARCHAR(100) NOT NULL,
+    granted BOOLEAN NOT NULL,
+    occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_account_permission_audit_target_time
+    ON garage.account_permission_audit(target_account_id, occurred_at DESC);
+ALTER TABLE garage.account_permission_audit ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE garage.account_permission_audit FROM PUBLIC, anon, authenticated;
