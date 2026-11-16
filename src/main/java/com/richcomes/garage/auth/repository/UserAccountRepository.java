@@ -1,0 +1,41 @@
+package com.richcomes.garage.auth.repository;
+
+import com.richcomes.garage.auth.entity.UserAccount;
+import java.util.Optional;
+import java.util.UUID;
+import org.springframework.data.jpa.repository.EntityGraph;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+
+public interface UserAccountRepository extends JpaRepository<UserAccount, Long> {
+
+    // Callers must pass UserAccount.normalizeUsername(input).
+    @EntityGraph(attributePaths = {"employee", "roles", "roles.permissions"})
+    Optional<UserAccount> findByUsername(String username);
+
+    @EntityGraph(attributePaths = {"employee", "roles", "roles.permissions"})
+    Optional<UserAccount> findOneById(Long id);
+
+    Optional<UserAccount> findByEmployee_Id(UUID employeeId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select a from UserAccount a where a.id = :id")
+    Optional<UserAccount> lockById(@org.springframework.data.repository.query.Param("id") Long id);
+
+    org.springframework.data.domain.Page<UserAccount> findByIdentityKind(
+            String identityKind, org.springframework.data.domain.Pageable pageable);
+
+
+    @Query("""
+            select count(a) from UserAccount a join a.roles r
+            where a.enabled = true and a.employee.active = true and r.code = 'OWNER'
+              and a.employee.position <> com.richcomes.garage.employee.entity.EmployeePosition.TECHNICIAN
+              and not exists (select other.id from UserAccount other join other.roles technical
+                              where other.id = a.id and technical.code not in ('OWNER', 'CASHIER'))
+            """)
+    long countActiveOwners();
+
+    boolean existsByUsername(String username);
+
+    boolean existsByEmployee_Id(UUID employeeId);
+}
