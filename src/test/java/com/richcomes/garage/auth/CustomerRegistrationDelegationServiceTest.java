@@ -6,6 +6,7 @@ import com.richcomes.garage.auth.entity.UserAccount;
 import com.richcomes.garage.auth.exception.AccountOperationException;
 import com.richcomes.garage.auth.repository.PermissionRepository;
 import com.richcomes.garage.auth.repository.UserAccountRepository;
+import com.richcomes.garage.auth.recovery.SecurityAuditRepository;
 import com.richcomes.garage.auth.security.AccountAccessPolicy;
 import com.richcomes.garage.auth.security.AccountPrincipal;
 import com.richcomes.garage.auth.service.AdminAccessGuard;
@@ -27,6 +28,7 @@ class CustomerRegistrationDelegationServiceTest {
     @Mock AdminAccessGuard guard;
     @Mock UserAccountRepository accounts;
     @Mock PermissionRepository definitions;
+    @Mock SecurityAuditRepository audit;
     private CustomerRegistrationDelegationService service;
     private UserAccount cashier;
     private Permission registration;
@@ -34,7 +36,7 @@ class CustomerRegistrationDelegationServiceTest {
             Set.of("OWNER"), Set.of("customer:delegate_register"));
 
     @BeforeEach void init() {
-        service = new CustomerRegistrationDelegationService(guard, accounts, definitions);
+        service = new CustomerRegistrationDelegationService(guard, accounts, definitions, audit);
         Employee employee = new Employee(); employee.setPosition(EmployeePosition.CASHIER);
         cashier = new UserAccount(employee, "cashier.one", "synthetic-hash");
         cashier.assignRole(new Role("CASHIER", "Cashier"));
