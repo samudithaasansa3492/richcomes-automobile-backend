@@ -82,7 +82,10 @@ public class CustomerAccountService {
     }
 
     public CustomerAccountResponse activate(Long accountId, AccountPrincipal actor) {
-        requireRegistrationActor(actor);
+        // Enrollment may be delegated to CASHIER. Enabling a customer login is a
+        // higher-trust step reserved for OWNER after out-of-band identity checks.
+        // This is intentionally enforced here as well as in the HTTP filter.
+        requireActivationActor(actor);
         if (accountId == null || accountId <= 0) {
             throw failure(INVALID_REQUEST, "Valid account ID required");
         }
@@ -103,6 +106,14 @@ public class CustomerAccountService {
                     "CUSTOMER_ACCOUNT_ACTIVATED", Instant.now()));
         }
         return response(account);
+    }
+
+    private void requireActivationActor(AccountPrincipal actor) {
+        if (actor == null || actor.accountId() == null || !actor.roles().contains("OWNER")
+                || !actor.permissions().contains("customer:register")) {
+            throw failure(CUSTOMER_REGISTRATION_NOT_ALLOWED,
+                    "Only an authorized OWNER can activate a customer login");
+        }
     }
 
     private void requireRegistrationActor(AccountPrincipal actor) {
