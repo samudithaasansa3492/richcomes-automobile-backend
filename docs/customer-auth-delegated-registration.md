@@ -72,3 +72,10 @@ To preserve meaningful coverage without weakening production security, the featu
 - Asserts that even authenticated CASHIER cannot use the unmapped service-category route (HTTP 403) until the module's permission matrix is reviewed.
 
 **Still blocked:** OWNER and authorized CASHIER cannot use service-category endpoints in the actual secured application until those endpoints receive explicit, reviewed permissions and audited delegation. Do not declare full business-module authorization complete or make these routes `permitAll` just to pass tests. The three new/updated tests are awaiting a clean rerun.
+
+
+## Delegated registration account-state hardening (2026-11-17)
+
+The legacy `PUT /api/accounts/{id}/permissions/customer-registration` delegation now **refuses new grants to disabled or inactive CASHIER identities**. OWNER can still revoke a registration permission from an inactive/disabled CASHIER, including an idempotent revoke when no grant exists; permission catalogue lookups are only required for new grants. Three unit regression tests were added. These commits have **not yet been rerun** on this parent PR branch.
+
+**Activation design review remains required**: the same `customer:register` permission authorizes disabled customer enrollment and later activation; a separate identity verification/evidence workflow and secure initial credential delivery process must be approved before production rollout. This change does not itself implement identity verification.
