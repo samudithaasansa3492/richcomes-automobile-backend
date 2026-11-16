@@ -70,7 +70,7 @@ echo "PASS: disposable PostgreSQL and Supabase NOLOGIN role fixtures"
 # Explicitly pass a new database URL and throwaway JWT signing keys.
 # A clean environment prevents other host settings from redirecting the test.
 URL="jdbc:postgresql://127.0.0.1:${port}/richcomes_context?sslmode=disable"
-echo "=== Starting only 2 Spring Boot full-context JUnit tests ==="
+echo "=== Full-context security tests plus opt-in PostgreSQL permission/audit transaction IT ==="
 
 if env -i \
   HOME="$HOME" USER="${USER:-codespace}" PATH="$PATH" JAVA_HOME="$JAVA_HOME" \
@@ -78,8 +78,9 @@ if env -i \
   JWT_ISSUER="https://isolated-junit.invalid" JWT_AUDIENCE=richcomes-test \
   JWT_PUBLIC_KEY_LOCATION="file:$ROOT/public.pem" \
   JWT_PRIVATE_KEY_LOCATION="file:$ROOT/private.pem" \
+  RICHCOMES_LOCAL_PG_TESTS=YES \
   ./mvnw -B \
-    -Dtest=GarageApplicationTests,ServiceCategoryControllerTest \
+    -Dtest=GarageApplicationTests,ServiceCategoryControllerTest,CashierPermissionPostgresIT \
     -Dspring.flyway.enabled=true \
     test > "$ROOT/maven.log" 2>&1
 then
