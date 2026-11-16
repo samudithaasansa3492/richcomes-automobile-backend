@@ -6,6 +6,9 @@ import com.richcomes.garage.auth.entity.UserAccount;
 import com.richcomes.garage.auth.exception.AccountOperationException;
 import com.richcomes.garage.auth.repository.RoleRepository;
 import com.richcomes.garage.auth.repository.UserAccountRepository;
+import com.richcomes.garage.auth.recovery.SecurityAuditRepository;
+import com.richcomes.garage.auth.security.AccountPrincipal;
+import java.util.Set;
 import com.richcomes.garage.auth.service.CustomerAccountService;
 import com.richcomes.garage.customer.entity.Customer;
 import com.richcomes.garage.customer.enums.CustomerStatus;
@@ -29,12 +32,15 @@ class CustomerAccountServiceTest {
     @Mock CustomerRepository customers;
     @Mock RoleRepository roles;
     @Mock PasswordEncoder passwords;
+    @Mock SecurityAuditRepository audit;
+    private final AccountPrincipal staff = new AccountPrincipal(51L, null, "owner.one",
+            Set.of("OWNER"), Set.of("customer:register"));
     private CustomerAccountService service;
     private Customer customer;
     private static final String PASSWORD = "synthetic secret password";
 
     @BeforeEach void init() {
-        service = new CustomerAccountService(accounts, customers, roles, passwords);
+        service = new CustomerAccountService(accounts, customers, roles, passwords, audit);
         customer = new Customer();
         ReflectionTestUtils.setField(customer, "id", 7L);
         customer.setStatus(CustomerStatus.ACTIVE);
@@ -49,7 +55,7 @@ class CustomerAccountServiceTest {
         when(roles.findByCode("CUSTOMER")).thenReturn(Optional.of(new Role("CUSTOMER", "Customer")));
         when(passwords.encode(PASSWORD)).thenReturn("encoded-password");
         when(accounts.saveAndFlush(any(UserAccount.class))).thenAnswer(inv -> inv.getArgument(0));
-        var result = service.register(request());
+        var result = service.register(request(), staff);
         assertEquals(7L, result.customerId());
         assertEquals("customer.one", result.username());
         assertFalse(result.enabled());
@@ -64,7 +70,7 @@ class CustomerAccountServiceTest {
     @Test void rejectsExistingCustomerIdentity() {
         when(customers.findById(7L)).thenReturn(Optional.of(customer));
         when(accounts.existsByCustomer_Id(7L)).thenReturn(true);
-        var ex = assertThrows(AccountOperationException.class, () -> service.register(request()));
+        var ex = assertThrows(AccountOperationException.class, () -> service.register(request(), staff));
         assertEquals(AccountOperationException.Code.CUSTOMER_ALREADY_HAS_ACCOUNT, ex.getCode());
         verifyNoInteractions(passwords);
     }
@@ -74,7 +80,7 @@ class CustomerAccountServiceTest {
         when(customers.findById(7L)).thenReturn(Optional.of(customer));
         assertEquals(AccountOperationException.Code.CUSTOMER_INACTIVE,
                 assertThrows(AccountOperationException.class,
-                        () -> service.register(request())).getCode());
+                        () -> service.register(request(), staff)).getCode());
         verifyNoInteractions(passwords);
     }
 
@@ -84,14 +90,14 @@ class CustomerAccountServiceTest {
         when(accounts.findOneById(4L)).thenReturn(Optional.of(account));
         when(accounts.saveAndFlush(account)).thenReturn(account);
         assertFalse(account.isEnabled());
-        assertTrue(service.activate(4L).enabled());
+        assertTrue(service.activate(4L, staff).enabled());
         assertTrue(account.isEnabled());
     }
 
     @Test void rejectsWeakPasswordBeforeDatabaseAccess() {
         var bad = new CustomerAccountCreateRequest(7L, "customer.one", "short");
         assertEquals(AccountOperationException.Code.INVALID_REQUEST,
-                assertThrows(AccountOperationException.class, () -> service.register(bad)).getCode());
+                assertThrows(AccountOperationException.class, () -> service.register(bad, staff)).getCode());
         verifyNoInteractions(accounts, customers, roles, passwords);
     }
 }
