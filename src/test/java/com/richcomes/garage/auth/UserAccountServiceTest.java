@@ -214,6 +214,21 @@ class UserAccountServiceTest {
     }
 
     @Test
+    void customerLoginIdentityCannotBeManagedThroughEmployeeAccountApi() {
+        var customer = new com.richcomes.garage.customer.entity.Customer();
+        var customerAccount = UserAccount.customer(customer, "customer.one",
+                "synthetic-hash", new Role("CUSTOMER", "Garage customer"));
+        ReflectionTestUtils.setField(customerAccount, "id", 88L);
+        when(accounts.findById(88L)).thenReturn(Optional.of(customerAccount));
+        assertCode(ACCOUNT_NOT_FOUND, () -> service.getAccount(88L));
+        assertCode(ACCOUNT_NOT_FOUND, () -> service.enableAccount(88L));
+        assertCode(ACCOUNT_NOT_FOUND, () -> service.disableAccount(88L, 99L));
+        assertCode(ACCOUNT_NOT_FOUND, () -> service.replaceRoles(
+                88L, new AccountRolesUpdateRequest(Set.of("CASHIER")), 99L));
+        verify(accounts, never()).saveAndFlush(any());
+    }
+
+    @Test
     void readsAccountWithoutSaving() {
         existingAccount();
         assertEquals("cashier.one", service.getAccount(1L).username());
