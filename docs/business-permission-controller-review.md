@@ -10,7 +10,8 @@ This is a map of implemented controller methods observed on the stacked feature 
 | `/api/v1/customers` | POST | `customer:register` |
 | `/api/v1/customers` | GET list, ID, NIC, search | `customer:read` |
 | `/api/v1/customers` | PUT /{id}, PATCH suspend/activate | `customer:manage` |
-| `/api/customer-accounts` | POST disabled enrollment, PATCH /{id}/activate | `customer:register` (identity proofing gate pending) |
+| `/api/customer-accounts` | POST disabled enrollment | Delegatable `customer:register` |
+| `/api/customer-accounts/{id}/activate` | PATCH activation | **OWNER role + `customer:register`**, identity proofing evidence still pending |
 | `/api/accounts/{id}/permissions/customer-registration` | PUT | OWNER-only `customer:delegate_register` |
 | `/api/accounts/{id}/permissions` | GET, PUT | OWNER-only `permission:delegate` |
 | `/api/v1/vehicles` | GET list/ID/number/customer; POST | `vehicle:read`, `vehicle:create` |
@@ -42,7 +43,7 @@ This is a map of implemented controller methods observed on the stacked feature 
 1. **Sensitive data**: Owner must explicitly approve delegating `customer:read`, `customer:manage`, financial `report:read`, `report:export`, `billing:read`, and notification data access to CASHIER. Current model permits OWNER to delegate those exact allowlisted privileges; it is not a data-field-level access policy.
 2. **Destructive actions**: `service:delete`, `history:delete`, `reminder:delete` and `notification:delete` are delegatable. Confirm which operations should instead be OWNER-only or require an extra audit/approval workflow.
 3. **Incomplete workflows**: GRN approve/confirm/cancel, inventory movement writes, invoice creation/issuance/payment/refund and purchase-order actions do not appear in the reviewed controllers. Do not grant or expose guessed endpoints for them.
-4. **Customer enrollment**: The current `customer:register` authority controls both account creation and activation. The backend has no independent verified proof-of-identity record for activation. Define how staff verification is recorded, how initial credentials are securely delivered, and whether activation requires a separate OWNER-only authority before releasing customer logins.
+4. **Customer enrollment**: CASHIER can enroll disabled customer accounts only after explicit delegation. **Only OWNER** (with `customer:register`) can activate, checked by both the HTTP filter and service. However, the backend still has no independent verified proof-of-identity record for activation. Define how evidence is recorded and how customer-controlled initial credentials are securely delivered before releasing customer logins.
 5. **Support/test paths**: `/api/v1/history/test` and `/api/v1/notifications/test` are currently covered by their modules' authenticated GET-read rules. Verify whether these development-only endpoints should be removed before release.
 6. **Dual delegation APIs**: `customer:register` may be granted via legacy customer-registration delegation and the newer general-permission API. Both are OWNER-gated and serialize using the OWNER role lock, but currently record audit actions through different audit tables. Review a single canonical admin UI and reporting strategy.
 7. **Authorization testing**: Existing JWT tests cover role isolation and a real grant/revoke `vehicle:read` flow. Add module-owner-approved API smoke tests for each sensitive route before production. Database RLS/revoke for identity and audit tables does not replace backend per-request authorization.
