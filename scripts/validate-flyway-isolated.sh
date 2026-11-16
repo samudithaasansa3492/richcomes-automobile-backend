@@ -85,6 +85,21 @@ if [[ ! "$HOST_BIND" =~ ^127\.0\.0\.1:([0-9]+)$ ]]; then
   exit 2
 fi
 PORT="${BASH_REMATCH[1]}"
+
+# Supabase provides anon/authenticated cluster roles. Plain PostgreSQL does not.
+# Simulate ONLY these role names in this disposable test container; do not
+# weaken application RLS/REVOKE statements or create login-capable roles.
+docker exec -i -e "PGPASSWORD=$PASSWORD" "$CONTAINER" \
+  psql -X -q -v ON_ERROR_STOP=1 -h 127.0.0.1 -U postgres -d postgres <<'SQL'
+CREATE ROLE anon NOLOGIN;
+CREATE ROLE authenticated NOLOGIN;
+SQL
+role_count="$(docker exec -e "PGPASSWORD=$PASSWORD" "$CONTAINER" \
+  psql -X -qAt -h 127.0.0.1 -U postgres -d postgres \
+  -c "SELECT count(*) FROM pg_roles WHERE rolname IN ('anon','authenticated') AND NOT rolcanlogin")"
+test "$role_count" = 2 || { echo 'FAIL: synthetic NOLOGIN roles not available'; exit 1; }
+echo 'PASS: isolated Supabase-compatible NOLOGIN role fixtures'
+
 docker exec -e "PGPASSWORD=$PASSWORD" "$CONTAINER" \
   createdb -h 127.0.0.1 -U postgres richcomes_fresh
 docker exec -e "PGPASSWORD=$PASSWORD" "$CONTAINER" \
