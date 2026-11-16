@@ -35,6 +35,18 @@
 4. Staff verifies identity **outside the API** and activates using `PATCH /api/customer-accounts/{accountId}/activate`. The initial secret must be delivered via an approved private channel, not email/chat plaintext or application logs.
 5. CUSTOMER signs in via existing `POST /api/auth/login`, uses `GET /api/customer/me`; requests for staff-only / other-customer routes are rejected.
 
+## Observed isolated validation (2026-11-17)
+
+A clean detached Codespaces worktree at source commit `f02106a7372a5856bc2706d545da4c99497b458e` reported:
+
+- **Java 21 Maven BUILD SUCCESS; 233 selected automated tests, 0 failures, errors or skips.** New test classes covered customer access policy, disabled-by-default account creation and activation, and per-account CASHIER permission delegation.
+- **PostgreSQL 17.12 disposable fresh V1–V21:** 21 successful Flyway migrations and validation PASS.
+- **PostgreSQL 17.12 disposable upgrade V1–V14→V21:** 14 + 4 + 3 migrations, validation PASS.
+- Role grants for CUSTOMER/OWNER/CASHIER, customer identity constraint and account_permissions RLS checks PASS on both databases. Synthetic legacy OWNER survived upgrade.
+- Worktree was clean; **shared Supabase was not modified**.
+
+**Limitations:** The selected tests excluded full Spring Boot context tests; no live SMTP/provider onboarding or full HTTP/JPA application run was claimed. Any new changes after `f02106a` require revalidation.
+
 ## Review and release gates
 
 **This is a draft feature, not a completed or deployed capability.** Requires PR #27's reviewed migration ordering and V21. Do not apply migrations to shared Supabase or run the application against it without specific release approval.
