@@ -6,6 +6,7 @@ import com.richcomes.garage.auth.repository.RoleRepository;
 import com.richcomes.garage.auth.repository.UserAccountRepository;
 import com.richcomes.garage.auth.security.AccountPrincipal;
 import com.richcomes.garage.auth.service.CashierPermissionService;
+import com.richcomes.garage.auth.service.AccessTokenService;
 import com.richcomes.garage.auth.service.UserAccountService;
 import com.richcomes.garage.employee.entity.Employee;
 import com.richcomes.garage.employee.entity.EmployeePosition;
@@ -20,10 +21,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import static org.junit.jupiter.api.Assertions.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
  * Real PostgreSQL persistence + transaction boundary. Opt in ONLY via
@@ -31,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * Never run this test using production or shared Supabase configuration.
  */
 @SpringBootTest
+@AutoConfigureMockMvc
 @EnabledIfEnvironmentVariable(named = "RICHCOMES_LOCAL_PG_TESTS", matches = "YES")
 class CashierPermissionPostgresIT {
     @Autowired DataSource dataSource;
@@ -41,6 +47,8 @@ class CashierPermissionPostgresIT {
     @Autowired RoleRepository roles;
     @Autowired CashierPermissionService grants;
     @Autowired UserAccountService staffAccounts;
+    @Autowired AccessTokenService tokenService;
+    @Autowired MockMvc mvc;
 
     @Test
     void committedGrantAndAuditRollbackAndRevokeAreAtomicInRealPostgres() throws Exception {
@@ -70,10 +78,16 @@ class CashierPermissionPostgresIT {
         var deny = new CashierPermissionChangeRequest("vehicle:read", false);
         Long target = fixture.cashierId();
         var owner = fixture.owner();
+        // Signed JWT is issued once; only DB grants change between requests.
+        String cashierBearer = "Bearer " + tokenService.issue(target).accessToken();
+        mvc.perform(get("/api/v1/vehicles").header("Authorization", cashierBearer))
+                .andExpect(status().isForbidden());
 
         assertEquals(Set.of("vehicle:read"), grants.change(target, allow, owner).grantedPermissions());
         assertEquals(1, auditCount(target));
         assertEquals(Set.of("vehicle:read"), currentDirectCodes(target));
+        mvc.perform(get("/api/v1/vehicles").header("Authorization", cashierBearer))
+                .andExpect(status().isOk());
 
         // Replaying the exact same grant must not double-write the audit.
         assertEquals(Set.of("vehicle:read"), grants.change(target, allow, owner).grantedPermissions());
@@ -87,10 +101,14 @@ class CashierPermissionPostgresIT {
         });
         assertEquals(Set.of("vehicle:read"), currentDirectCodes(target));
         assertEquals(1, auditCount(target));
+        mvc.perform(get("/api/v1/vehicles").header("Authorization", cashierBearer))
+                .andExpect(status().isOk());
 
         assertTrue(grants.change(target, deny, owner).grantedPermissions().isEmpty());
         assertTrue(currentDirectCodes(target).isEmpty());
         assertEquals(2, auditCount(target));
+        mvc.perform(get("/api/v1/vehicles").header("Authorization", cashierBearer))
+                .andExpect(status().isForbidden());
         var actions = sql.queryForList("""
                 SELECT granted FROM garage.account_permission_audit
                  WHERE target_account_id = ? AND permission_code = 'vehicle:read'
@@ -104,9 +122,13 @@ class CashierPermissionPostgresIT {
         grants.change(target, allow, owner);
         assertEquals(3, auditCount(target));
         staffAccounts.disableAccount(target, fixture.ownerId());
+        mvc.perform(get("/api/v1/vehicles").header("Authorization", cashierBearer))
+                .andExpect(status().isUnauthorized());
         assertTrue(currentDirectCodes(target).isEmpty());
         assertEquals(4, auditCount(target));
         staffAccounts.enableAccount(target);
+        mvc.perform(get("/api/v1/vehicles").header("Authorization", cashierBearer))
+                .andExpect(status().isForbidden());
         assertTrue(currentDirectCodes(target).isEmpty());
         assertEquals(4, auditCount(target));
     }
