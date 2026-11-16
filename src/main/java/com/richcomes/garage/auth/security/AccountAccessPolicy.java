@@ -52,15 +52,17 @@ public final class AccountAccessPolicy {
         boolean owner = account.getRoles().stream().anyMatch(role -> "OWNER".equals(role.getCode()));
         if (!owner) {
             granted.remove("customer:delegate_register");
-            granted.remove("customer:register");
+            granted.remove("permission:delegate");
+            granted.remove("audit:read");
+            // No cashier obtains any business-module grant from their shared role:
+            // OWNER grants are effective only when recorded against that individual.
+            granted.removeIf(CashierDelegatablePermissions::isDelegatable);
         }
-        // Direct permissions never confer role or generic business data access.
-        // A cashier receives only the specifically delegated registration action.
         if (account.getRoles().size() == 1 && account.getRoles().stream()
                 .allMatch(role -> "CASHIER".equals(role.getCode()))) {
             account.getDirectPermissions().stream()
                     .map(permission -> permission.getCode())
-                    .filter("customer:register"::equals)
+                    .filter(CashierDelegatablePermissions::isDelegatable)
                     .forEach(granted::add);
         }
         return Set.copyOf(granted);
