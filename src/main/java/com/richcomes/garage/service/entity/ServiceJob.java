@@ -27,7 +27,7 @@ public class ServiceJob {
     @Column(name = "assigned_employee_id")
     private Long assignedEmployeeId;
 
-    // Job එකේ වර්තමාන තත්ත්වය (Status)
+    // (Status)
     @Enumerated(EnumType.STRING)
     private JobStatus status;
 
