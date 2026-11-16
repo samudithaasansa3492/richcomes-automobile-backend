@@ -364,6 +364,29 @@ class SecurityFlowTest {
         verifyNoInteractions(accountService);
     }
 
+    @Test
+    void customerAndDelegationRoutesDenyAnonymousOrUndelegatedCashier() throws Exception {
+        mvc.perform(post("/api/customer-accounts")
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/customer/me"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/customer-accounts")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(patch("/api/customer-accounts/5/activate")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/accounts/8/permissions/customer-registration")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":true}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/customer/me")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
     @Configuration(proxyBeanMethods = false)
     @EnableWebMvc
     @Import({SecurityConfig.class, SecurityErrorHandlers.class, AccountJwtAuthenticationConverter.class,
