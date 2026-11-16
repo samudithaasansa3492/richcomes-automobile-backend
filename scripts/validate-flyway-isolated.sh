@@ -63,15 +63,21 @@ docker run --rm -d --name "$CONTAINER" \
   -e POSTGRES_USER=postgres -e POSTGRES_PASSWORD="$PASSWORD" \
   -e POSTGRES_DB=postgres -p 127.0.0.1::5432 postgres:17.12 >/dev/null
 
+# Official postgres container briefly starts a socket-only bootstrap server.
+# A socket-based pg_isready can succeed before that server shuts down, so
+# require an authenticated TCP query against the final PostgreSQL server.
 ready=0
-for _ in $(seq 1 60); do
-  if docker exec "$CONTAINER" pg_isready -U postgres -d postgres >/dev/null 2>&1; then
+for _ in $(seq 1 120); do
+  if docker exec -e "PGPASSWORD=$PASSWORD" "$CONTAINER" \
+      psql -X -qAt -h 127.0.0.1 -p 5432 -U postgres -d postgres \
+      -c 'SELECT 1' 2>/dev/null | grep -qx '1'; then
     ready=1
     break
   fi
-  sleep 0.25
+  sleep 0.5
 done
-test "$ready" -eq 1 || { echo 'FAIL: isolated PostgreSQL not ready'; exit 1; }
+test "$ready" -eq 1 || { echo 'FAIL: final isolated PostgreSQL TCP server not ready'; exit 1; }
+echo 'PASS: final PostgreSQL server accepts authenticated TCP connections'
 
 HOST_BIND="$(docker port "$CONTAINER" 5432/tcp)"
 if [[ ! "$HOST_BIND" =~ ^127\.0\.0\.1:([0-9]+)$ ]]; then
@@ -79,8 +85,10 @@ if [[ ! "$HOST_BIND" =~ ^127\.0\.0\.1:([0-9]+)$ ]]; then
   exit 2
 fi
 PORT="${BASH_REMATCH[1]}"
-docker exec "$CONTAINER" createdb -U postgres richcomes_fresh
-docker exec "$CONTAINER" createdb -U postgres richcomes_upgrade
+docker exec -e "PGPASSWORD=$PASSWORD" "$CONTAINER" \
+  createdb -h 127.0.0.1 -U postgres richcomes_fresh
+docker exec -e "PGPASSWORD=$PASSWORD" "$CONTAINER" \
+  createdb -h 127.0.0.1 -U postgres richcomes_upgrade
 
 flyway() {
   local database="$1" version="$2"
