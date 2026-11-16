@@ -44,3 +44,19 @@ Do not restore the former duplicate filenames, run `flyway repair`, edit applied
 - The `@WebMvcTest` Customer/Vehicle controller tests currently fail during context startup because `AccountJwtAuthenticationConverter` requires `UserAccountRepository` outside the slice. Test configuration and production permissions require separately reviewed changes.
 - The approved CUSTOMER identity/onboarding and per-CASHIER delegated `customer:register` permission are new capabilities, not implemented by renumbering Flyway SQL.
 - `.gitignore` now excludes local `.env` variants. This does not remove any file previously tracked or exposed in an archive; verify Git history and rotate any actually exposed credentials through the agreed security process.
+
+
+## Disposable PostgreSQL validation — observed on 2026-11-16
+
+From a clean detached worktree at commit `a14ff02533e9c5715bbcb6c2f7b75cc2b1497c95` with Java 21, user-run Codespaces output showed:
+
+- Migration source audit: **PASS**, unique versions V1–V20 and preserved applied V12–V14 names.
+- PostgreSQL 17.12 final server authentication and isolated Supabase-compatible `anon` / `authenticated` NOLOGIN role fixtures: **PASS**.
+- Fresh database: **20 migrations executed; Flyway validate PASS; 20 successful history entries**.
+- Upgrade database: **14 + 4 + 2 migrations executed; Flyway validate PASS; 20 successful history entries**.
+- Synthetic pre-V19 legacy OWNER_ADMIN account migration: **PASS**, account, grants, and OWNER identity preserved.
+- Script reported **no shared database touched** and final worktree clean.
+
+Validation was run on a disposable PostgreSQL container through `bash scripts/validate-flyway-isolated.sh` and is **not** evidence that real shared Supabase has been migrated or that full Spring Boot integration/security tests have passed. The script creates synthetic roles available on Supabase but absent from bare PostgreSQL. No live production deployment or migration is authorized by this result.
+
+The verification establishes that this migration sequence is executable in the tested fresh/upgrade fixtures. It does not replace a pre-rollout review of real database schema drift, migration checksums, snapshots, and production compatibility.
