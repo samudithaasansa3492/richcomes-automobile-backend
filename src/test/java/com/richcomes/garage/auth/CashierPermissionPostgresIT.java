@@ -6,6 +6,7 @@ import com.richcomes.garage.auth.repository.RoleRepository;
 import com.richcomes.garage.auth.repository.UserAccountRepository;
 import com.richcomes.garage.auth.security.AccountPrincipal;
 import com.richcomes.garage.auth.service.CashierPermissionService;
+import com.richcomes.garage.auth.service.UserAccountService;
 import com.richcomes.garage.employee.entity.Employee;
 import com.richcomes.garage.employee.entity.EmployeePosition;
 import com.richcomes.garage.employee.repository.EmployeeRepository;
@@ -39,6 +40,7 @@ class CashierPermissionPostgresIT {
     @Autowired UserAccountRepository accounts;
     @Autowired RoleRepository roles;
     @Autowired CashierPermissionService grants;
+    @Autowired UserAccountService staffAccounts;
 
     @Test
     void committedGrantAndAuditRollbackAndRevokeAreAtomicInRealPostgres() throws Exception {
@@ -95,6 +97,18 @@ class CashierPermissionPostgresIT {
                  ORDER BY occurred_at ASC, id ASC
                 """, Boolean.class, target);
         assertEquals(java.util.List.of(true, false), actions);
+
+        // Re-grant, then actually disable/re-enable that staff account using
+        // the production service. Its grants must be durably revoked and
+        // audited, and re-enable must not resurrect them.
+        grants.change(target, allow, owner);
+        assertEquals(3, auditCount(target));
+        staffAccounts.disableAccount(target, fixture.ownerId());
+        assertTrue(currentDirectCodes(target).isEmpty());
+        assertEquals(4, auditCount(target));
+        staffAccounts.enableAccount(target);
+        assertTrue(currentDirectCodes(target).isEmpty());
+        assertEquals(4, auditCount(target));
     }
 
     private void assertIsolatedPostgres() throws SQLException {
