@@ -6,7 +6,12 @@ import com.richcomes.garage.customer.enums.CustomerType;
 import com.richcomes.garage.customer.service.CustomerService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
+import com.richcomes.garage.auth.config.SecurityConfig;
+import com.richcomes.garage.auth.security.AccountJwtAuthenticationConverter;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -22,7 +27,13 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@WebMvcTest(CustomerController.class)
+// Controller-only tests: security policies are tested separately in SecurityFlowTest.
+// Exclude the production JWT filter, which requires a full JPA account repository.
+@WebMvcTest(value = CustomerController.class,
+    excludeFilters = @ComponentScan.Filter(
+        type = FilterType.ASSIGNABLE_TYPE,
+        classes = {SecurityConfig.class, AccountJwtAuthenticationConverter.class}))
+@AutoConfigureMockMvc(addFilters = false)
 class CustomerControllerTest {
 
     @Autowired
