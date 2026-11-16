@@ -72,6 +72,25 @@ class CustomerAccountAccessPolicyTest {
         assertFalse(AccountAccessPolicy.effectivePermissions(chosen).contains("customer:register"));
     }
 
+    @Test void cashierCannotGainLegacyEmployeeAccountOrAuditAccessFromAnyGrantSource() {
+        var staff = new Employee();
+        staff.setPosition(EmployeePosition.CASHIER);
+        var cashierRole = new Role("CASHIER", "Cashier");
+        for (String code : Set.of("employee:read", "employee:create", "employee:update",
+                "employee:deactivate", "account:read", "account:create", "account:manage",
+                "audit:read", "permission:delegate")) {
+            cashierRole.grantPermission(new Permission(code, "Unsafe shared role grant"));
+        }
+        var cashier = new UserAccount(staff, "cashier.legacy", "encoded-hash");
+        cashier.assignRole(cashierRole);
+        cashier.enable();
+        cashier.grantDirectPermission(new Permission("account:manage", "Unsafe direct grant"));
+        assertEquals(Set.of(), AccountAccessPolicy.effectivePermissions(cashier));
+        // Only explicit allowlisted individual business access is effective.
+        cashier.grantDirectPermission(new Permission("vehicle:read", "Read vehicles"));
+        assertEquals(Set.of("vehicle:read"), AccountAccessPolicy.effectivePermissions(cashier));
+    }
+
     @Test void technicalAdminCannotReceiveBusinessRegistrationFromAccidentalGrant() {
         Role admin = new Role("ADMIN", "Technical");
         admin.grantPermission(new Permission("customer:register", "Unsafe grant"));
