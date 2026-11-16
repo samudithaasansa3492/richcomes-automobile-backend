@@ -58,6 +58,12 @@ class CustomerAccountAccessPolicyTest {
         UserAccount other = new UserAccount(employee2, "cashier.two", "hash");
         other.assignRole(cashier); other.enable();
         Permission register = new Permission("customer:register", "Register");
+        // Even an erroneous role-wide grant must not authorize all CASHIER accounts.
+        cashier.grantPermission(register);
+        cashier.grantPermission(new Permission("customer:delegate_register", "OWNER-only action"));
+        assertFalse(AccountAccessPolicy.effectivePermissions(chosen).contains("customer:register"));
+        assertFalse(AccountAccessPolicy.effectivePermissions(other).contains("customer:register"));
+        assertFalse(AccountAccessPolicy.effectivePermissions(other).contains("customer:delegate_register"));
         chosen.grantDirectPermission(register);
 
         assertTrue(AccountAccessPolicy.effectivePermissions(chosen).contains("customer:register"));
