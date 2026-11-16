@@ -148,10 +148,42 @@ verify_customer_security() {
   echo "PASS: ${db} CUSTOMER/OWNER/CASHIER grants, identity constraint and RLS"
 }
 
+verify_business_delegation() {
+  local db="$1" verdict
+  verdict="$(docker exec "$CONTAINER" psql -U postgres -d "richcomes_${db}" -Atc "
+    SELECT CASE WHEN
+      (SELECT COUNT(*) FROM garage.permissions
+       WHERE code IN ('permission:delegate','vehicle:read','vehicle:update',
+                      'appointment:manage','inventory:read','service:read',
+                      'billing:read','report:read','history:read','reminder:read',
+                      'notification:read','audit:read')) = 12
+      AND (SELECT COUNT(*) FROM garage.role_permissions rp
+           JOIN garage.roles r ON r.id=rp.role_id
+           JOIN garage.permissions p ON p.id=rp.permission_id
+           WHERE r.code='OWNER' AND p.code IN
+           ('permission:delegate','vehicle:read','vehicle:update','appointment:manage',
+            'inventory:read','service:read','billing:read','report:read',
+            'history:read','reminder:read','notification:read','audit:read')) = 12
+      AND (SELECT COUNT(*) FROM garage.role_permissions rp
+           JOIN garage.roles r ON r.id=rp.role_id
+           JOIN garage.permissions p ON p.id=rp.permission_id
+           WHERE r.code IN ('CASHIER','CUSTOMER','ADMIN')
+           AND p.code IN ('permission:delegate','audit:read','vehicle:read',
+                          'inventory:read','billing:read')) = 0
+      AND EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+           WHERE n.nspname='garage' AND c.relname='account_permission_audit'
+           AND c.relrowsecurity)
+    THEN 'PASS' ELSE 'FAIL' END
+  ")" 
+  test "$verdict" = PASS || { echo "FAIL: ${db} business delegation schema or role grants"; exit 1; }
+  echo "PASS: ${db} explicit OWNER business permissions, no CASHIER wildcard grants, audit RLS"
+}
+
 echo '=== Fresh install V1-V22 ==='
 flyway fresh latest
 verify_count fresh
 verify_customer_security fresh
+verify_business_delegation fresh
 
 echo '=== Simulate upgrade V1-V14 to V22 ==='
 flyway upgrade 14
@@ -176,6 +208,7 @@ SQL
 flyway upgrade latest
 verify_count upgrade
 verify_customer_security upgrade
+verify_business_delegation upgrade
 owner_count="$(docker exec "$CONTAINER" psql -U postgres -d richcomes_upgrade -Atc \
   "SELECT count(*) FROM garage.user_accounts a JOIN garage.user_account_roles ar ON ar.user_account_id=a.id JOIN garage.roles r ON r.id=ar.role_id JOIN garage.employees e ON e.id=a.employee_id WHERE a.username='validation.owner' AND a.enabled AND a.identity_kind='BUSINESS' AND r.code='OWNER' AND e.position='OWNER'")"
 test "$owner_count" = 1 || { echo 'FAIL: synthetic legacy OWNER was not preserved'; exit 1; }
