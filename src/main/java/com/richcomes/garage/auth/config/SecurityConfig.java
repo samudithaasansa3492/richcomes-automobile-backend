@@ -61,6 +61,111 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/accounts/{id}/roles").hasAuthority("account:manage")
                         .requestMatchers(HttpMethod.PATCH, "/api/accounts/{id}/enable", "/api/accounts/{id}/disable")
                             .hasAuthority("account:manage")
+                        // Grant/revoke one listed action for one CASHIER; no blanket role changes.
+                        .requestMatchers(HttpMethod.GET, "/api/accounts/{id}/permissions")
+                            .hasAuthority("permission:delegate")
+                        .requestMatchers(HttpMethod.PUT, "/api/accounts/{id}/permissions")
+                            .hasAuthority("permission:delegate")
+
+                        // Garage business data: permission checks remain method-scoped
+                        // and default-deny for unimplemented or future write endpoints.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/vehicles", "/api/v1/vehicles/**")
+                            .hasAuthority("vehicle:read")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/vehicles").hasAuthority("vehicle:create")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/vehicles/{id}")
+                            .hasAuthority("vehicle:update")
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/vehicles/{id}/activate",
+                                "/api/v1/vehicles/{id}/deactivate").hasAuthority("vehicle:update")
+
+                        .requestMatchers(HttpMethod.GET, "/api/v1/appointments", "/api/v1/appointments/**")
+                            .hasAuthority("appointment:read")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/appointments").hasAuthority("appointment:create")
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/appointments/{id}/approve",
+                                "/api/v1/appointments/{id}/reject",
+                                "/api/v1/appointments/{id}/complete",
+                                "/api/v1/appointments/{id}/not-completed")
+                            .hasAuthority("appointment:manage")
+
+                        .requestMatchers(HttpMethod.GET, "/api/inventory/suppliers", "/api/inventory/suppliers/**",
+                                "/api/inventory/categories", "/api/inventory/categories/**",
+                                "/api/inventory/items", "/api/inventory/items/**",
+                                "/api/inventory/grns", "/api/inventory/grns/**",
+                                "/api/inventory/stock-transactions", "/api/inventory/stock-transactions/**")
+                            .hasAuthority("inventory:read")
+                        .requestMatchers(HttpMethod.POST, "/api/inventory/suppliers",
+                                "/api/inventory/categories", "/api/inventory/items",
+                                "/api/inventory/grns").hasAuthority("inventory:create")
+                        .requestMatchers(HttpMethod.PUT, "/api/inventory/suppliers/{id}",
+                                "/api/inventory/categories/{id}", "/api/inventory/items/{id}")
+                            .hasAuthority("inventory:update")
+                        .requestMatchers(HttpMethod.PATCH, "/api/inventory/suppliers/{id}/activate",
+                                "/api/inventory/suppliers/{id}/deactivate",
+                                "/api/inventory/categories/{id}/activate",
+                                "/api/inventory/categories/{id}/deactivate",
+                                "/api/inventory/items/{id}/activate",
+                                "/api/inventory/items/{id}/deactivate").hasAuthority("inventory:update")
+
+                        .requestMatchers(HttpMethod.GET, "/api/service-categories", "/api/service-categories/**",
+                                "/api/service-items", "/api/service-items/**",
+                                "/api/service-jobs", "/api/service-jobs/**",
+                                "/api/service-job-items", "/api/service-job-items/**",
+                                "/api/service-job-parts", "/api/service-job-parts/**")
+                            .hasAuthority("service:read")
+                        .requestMatchers(HttpMethod.POST, "/api/service-categories", "/api/service-items",
+                                "/api/service-jobs", "/api/service-job-items", "/api/service-job-parts")
+                            .hasAuthority("service:create")
+                        .requestMatchers(HttpMethod.PUT, "/api/service-categories/{id}",
+                                "/api/service-items/{id}", "/api/service-jobs/{id}")
+                            .hasAuthority("service:update")
+                        .requestMatchers(HttpMethod.PATCH, "/api/service-jobs/{id}/status")
+                            .hasAuthority("service:update")
+                        .requestMatchers(HttpMethod.DELETE, "/api/service-categories/{id}",
+                                "/api/service-items/{id}", "/api/service-jobs/{id}",
+                                "/api/service-job-items/{id}", "/api/service-job-parts/{id}")
+                            .hasAuthority("service:delete")
+
+                        .requestMatchers(HttpMethod.GET, "/api/v1/billing/invoices/{id}")
+                            .hasAuthority("billing:read")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/billing/calculate")
+                            .hasAuthority("billing:calculate")
+
+                        .requestMatchers(HttpMethod.GET, "/api/v1/reports/export/pdf",
+                                "/api/v1/reports/operational/pdf", "/api/v1/reports/stock/pdf",
+                                "/api/v1/reports/financial/pdf", "/api/v1/reports/performance/pdf")
+                            .hasAuthority("report:export")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/reports/dashboard",
+                                "/api/v1/reports/operational", "/api/v1/reports/stock",
+                                "/api/v1/reports/financial", "/api/v1/reports/performance",
+                                "/api/v1/reports/comprehensive").hasAuthority("report:read")
+
+                        .requestMatchers(HttpMethod.GET, "/api/v1/history", "/api/v1/history/**")
+                            .hasAuthority("history:read")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/history").hasAuthority("history:create")
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/history/{id}")
+                            .hasAuthority("history:update")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/history/{id}")
+                            .hasAuthority("history:delete")
+
+                        .requestMatchers(HttpMethod.GET, "/api/v1/reminders", "/api/v1/reminders/**")
+                            .hasAuthority("reminder:read")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/reminders",
+                                "/api/v1/reminders/generate-from-history").hasAuthority("reminder:create")
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/reminders/{id}",
+                                "/api/v1/reminders/{id}/send", "/api/v1/reminders/{id}/cancel")
+                            .hasAuthority("reminder:manage")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/reminders/{id}")
+                            .hasAuthority("reminder:delete")
+
+                        .requestMatchers(HttpMethod.GET, "/api/v1/notifications", "/api/v1/notifications/**")
+                            .hasAuthority("notification:read")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/notifications/send",
+                                "/api/v1/notifications/{id}/retry").hasAuthority("notification:send")
+                        .requestMatchers(HttpMethod.DELETE, "/api/v1/notifications/{id}")
+                            .hasAuthority("notification:delete")
+
+                        // Audit read is OWNER-only and deliberately NOT delegatable.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/audit-logs", "/api/v1/audit-logs/**")
+                            .hasAuthority("audit:read")
                         .anyRequest().denyAll())
                 .build();
     }
