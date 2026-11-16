@@ -5,6 +5,9 @@ import com.richcomes.garage.auth.dto.AccountPageResponse;
 import com.richcomes.garage.auth.dto.AccountResponse;
 import com.richcomes.garage.auth.dto.AccountRolesUpdateRequest;
 import com.richcomes.garage.auth.entity.Role;
+import com.richcomes.garage.auth.entity.AccountPermissionAuditEvent;
+import com.richcomes.garage.auth.repository.AccountPermissionAuditRepository;
+import java.time.Instant;
 import com.richcomes.garage.auth.entity.UserAccount;
 import com.richcomes.garage.auth.exception.AccountOperationException;
 import com.richcomes.garage.auth.repository.RoleRepository;
@@ -42,16 +45,19 @@ public class UserAccountService {
     private final PasswordEncoder passwordEncoder;
     private final Validator validator;
     private final AdminAccessGuard adminAccess;
+    private final AccountPermissionAuditRepository permissionAudit;
 
     public UserAccountService(UserAccountRepository accounts, EmployeeRepository employees,
                               RoleRepository roles, PasswordEncoder passwordEncoder, Validator validator,
-                              AdminAccessGuard adminAccess) {
+                              AdminAccessGuard adminAccess,
+                              AccountPermissionAuditRepository permissionAudit) {
         this.accounts = accounts;
         this.employees = employees;
         this.roles = roles;
         this.passwordEncoder = passwordEncoder;
         this.validator = validator;
         this.adminAccess = adminAccess;
+        this.permissionAudit = permissionAudit;
     }
 
     public AccountResponse createAccount(AccountCreateRequest request) {
@@ -128,6 +134,15 @@ public class UserAccountService {
         if (replacements.stream().noneMatch(role -> "OWNER".equals(role.getCode()))) {
             adminAccess.protectOwner(account);
         }
+        // A role transition must not resurrect old CASHIER permissions when the
+        // employee later becomes a cashier again. Record revocations with actor.
+        var previousCodes = account.getRoles().stream()
+                .map(Role::getCode).collect(Collectors.toUnmodifiableSet());
+        var replacementCodes = replacements.stream()
+                .map(Role::getCode).collect(Collectors.toUnmodifiableSet());
+        if (!previousCodes.equals(replacementCodes)) {
+            revokeAllDelegatedPermissions(account, actorId);
+        }
         // Resolve all codes before changing managed state.
         new HashSet<>(account.getRoles()).forEach(account::removeRole);
         replacements.forEach(account::assignRole);
@@ -156,8 +171,19 @@ public class UserAccountService {
         UserAccount account = findAccount(accountId);
         requireBusinessTarget(account);
         adminAccess.protectOwner(account);
+        // Disabling an account also revokes its direct grants. If re-enabled,
+        // the OWNER must explicitly authorize them again.
+        revokeAllDelegatedPermissions(account, actorId);
         account.disable();
         return toResponse(accounts.saveAndFlush(account));
+    }
+
+    private void revokeAllDelegatedPermissions(UserAccount account, Long actorId) {
+        for (var permission : new HashSet<>(account.getDirectPermissions())) {
+            account.revokeDirectPermission(permission);
+            permissionAudit.save(new AccountPermissionAuditEvent(
+                    actorId, account.getId(), permission.getCode(), false, Instant.now()));
+        }
     }
 
     private UserAccount findAccount(Long accountId) {
