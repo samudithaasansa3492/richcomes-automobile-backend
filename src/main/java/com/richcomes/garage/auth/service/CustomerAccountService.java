@@ -3,12 +3,16 @@ package com.richcomes.garage.auth.service;
 import com.richcomes.garage.auth.dto.CustomerAccountCreateRequest;
 import com.richcomes.garage.auth.dto.CustomerAccountResponse;
 import com.richcomes.garage.auth.entity.UserAccount;
+import com.richcomes.garage.auth.recovery.SecurityAuditEvent;
+import com.richcomes.garage.auth.recovery.SecurityAuditRepository;
+import com.richcomes.garage.auth.security.AccountPrincipal;
 import com.richcomes.garage.auth.exception.AccountOperationException;
 import com.richcomes.garage.auth.repository.RoleRepository;
 import com.richcomes.garage.auth.repository.UserAccountRepository;
 import com.richcomes.garage.customer.enums.CustomerStatus;
 import com.richcomes.garage.customer.repository.CustomerRepository;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -25,16 +29,19 @@ public class CustomerAccountService {
     private final CustomerRepository customers;
     private final RoleRepository roles;
     private final PasswordEncoder passwords;
+    private final SecurityAuditRepository audit;
 
     public CustomerAccountService(UserAccountRepository accounts, CustomerRepository customers,
-            RoleRepository roles, PasswordEncoder passwords) {
+            RoleRepository roles, PasswordEncoder passwords, SecurityAuditRepository audit) {
         this.accounts = accounts;
         this.customers = customers;
         this.roles = roles;
         this.passwords = passwords;
+        this.audit = audit;
     }
 
-    public CustomerAccountResponse register(CustomerAccountCreateRequest request) {
+    public CustomerAccountResponse register(CustomerAccountCreateRequest request, AccountPrincipal actor) {
+        requireRegistrationActor(actor);
         if (request == null || request.customerId() == null || request.customerId() <= 0
                 || request.username() == null || request.password() == null
                 || request.password().length() < 15 || request.password().length() > 72
@@ -64,14 +71,18 @@ public class CustomerAccountService {
         var account = UserAccount.customer(customer, username, passwords.encode(request.password()), customerRole);
         // Keep it disabled until trusted staff separately verifies identity and activates.
         try {
-            return response(accounts.saveAndFlush(account));
+            var saved = accounts.saveAndFlush(account);
+            audit.save(new SecurityAuditEvent(actor.accountId(), saved.getId(),
+                    "CUSTOMER_ACCOUNT_CREATED_DISABLED", Instant.now()));
+            return response(saved);
         } catch (DataIntegrityViolationException conflict) {
             // DB unique constraints protect concurrent account enrollment.
             throw failure(ACCOUNT_CONFLICT, "Customer account could not be created; check for an existing account");
         }
     }
 
-    public CustomerAccountResponse activate(Long accountId) {
+    public CustomerAccountResponse activate(Long accountId, AccountPrincipal actor) {
+        requireRegistrationActor(actor);
         if (accountId == null || accountId <= 0) {
             throw failure(INVALID_REQUEST, "Valid account ID required");
         }
@@ -85,8 +96,20 @@ public class CustomerAccountService {
         if (account.getCustomer().getStatus() != CustomerStatus.ACTIVE) {
             throw failure(CUSTOMER_INACTIVE, "Cannot activate a suspended customer");
         }
-        account.enable();
-        return response(accounts.saveAndFlush(account));
+        if (!account.isEnabled()) {
+            account.enable();
+            accounts.saveAndFlush(account);
+            audit.save(new SecurityAuditEvent(actor.accountId(), account.getId(),
+                    "CUSTOMER_ACCOUNT_ACTIVATED", Instant.now()));
+        }
+        return response(account);
+    }
+
+    private void requireRegistrationActor(AccountPrincipal actor) {
+        if (actor == null || actor.accountId() == null || !actor.permissions().contains("customer:register")
+                || actor.roles().stream().noneMatch(role -> role.equals("OWNER") || role.equals("CASHIER"))) {
+            throw failure(CUSTOMER_REGISTRATION_NOT_ALLOWED, "Customer registration permission required");
+        }
     }
 
     private CustomerAccountResponse response(UserAccount account) {
