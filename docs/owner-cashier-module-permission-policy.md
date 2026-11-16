@@ -40,3 +40,7 @@ Only current controller methods are mapped for mutation routes. Unimplemented pa
 - Validate Java 21 selected regression, per-cashier service, JWT authorization and full-context tests with `bash scripts/validate-spring-context-isolated.sh`, never with shared Supabase configuration.
 - Do not merge while PR #27 and #29 are unreviewed; after dependency merges, rebase carefully, review security policies and coordinate API names with all feature owners.
 - Confirm OWNER-only high-impact actions, report finance visibility and destructive service/history DELETE privileges with stakeholders before production.
+
+## Role change and account disable safeguards
+
+A staff account's previously delegated permissions must never reactivate accidentally after it is reassigned between `CASHIER` and `OWNER`, or disabled and subsequently re-enabled. The business account service now revokes all direct permissions when the role set **actually changes** or an account is disabled, and writes a distinct `account_permission_audit` revocation record (actor, target, permission and time) for every removed grant in the same database transaction. Assigning an unchanged role set does not remove valid grants. Re-enabling a cashier requires the OWNER to grant necessary business permissions explicitly again. These changes were made **after** the 249/249 regression pass and require fresh verification.
