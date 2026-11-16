@@ -114,9 +114,9 @@ flyway() {
 verify_count() {
   local db="$1" count
   count="$(docker exec "$CONTAINER" psql -U postgres -d "richcomes_${db}" -Atc \
-    "SELECT COUNT(*) FROM public.flyway_schema_history WHERE success AND version ~ '^[0-9]+$' AND version::int BETWEEN 1 AND 21")"
-  test "$count" = 21 || { echo "FAIL: ${db} migration count=${count}"; exit 1; }
-  echo "PASS: ${db} contains 21 successful Flyway migrations"
+    "SELECT COUNT(*) FROM public.flyway_schema_history WHERE success AND version ~ '^[0-9]+$' AND version::int BETWEEN 1 AND 22")"
+  test "$count" = 22 || { echo "FAIL: ${db} migration count=${count}"; exit 1; }
+  echo "PASS: ${db} contains 22 successful Flyway migrations"
 }
 
 verify_customer_security() {
@@ -148,12 +148,12 @@ verify_customer_security() {
   echo "PASS: ${db} CUSTOMER/OWNER/CASHIER grants, identity constraint and RLS"
 }
 
-echo '=== Fresh install V1-V21 ==='
+echo '=== Fresh install V1-V22 ==='
 flyway fresh latest
 verify_count fresh
 verify_customer_security fresh
 
-echo '=== Simulate upgrade V1-V14 to V21 ==='
+echo '=== Simulate upgrade V1-V14 to V22 ==='
 flyway upgrade 14
 flyway upgrade 18
 
