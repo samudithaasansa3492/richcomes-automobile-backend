@@ -4,6 +4,9 @@ import com.richcomes.garage.auth.config.PasswordConfig;
 import com.richcomes.garage.auth.dto.AccountCreateRequest;
 import com.richcomes.garage.auth.dto.AccountRolesUpdateRequest;
 import com.richcomes.garage.auth.entity.Role;
+import com.richcomes.garage.auth.entity.Permission;
+import com.richcomes.garage.auth.entity.AccountPermissionAuditEvent;
+import com.richcomes.garage.auth.repository.AccountPermissionAuditRepository;
 import com.richcomes.garage.auth.entity.UserAccount;
 import com.richcomes.garage.auth.exception.AccountOperationException;
 import com.richcomes.garage.auth.repository.RoleRepository;
@@ -43,6 +46,7 @@ class UserAccountServiceTest {
     private PasswordEncoder encoder;
     private UserAccountService service;
     private com.richcomes.garage.auth.service.AdminAccessGuard guard;
+    private AccountPermissionAuditRepository permissionAudit;
     private Employee employee;
     private Role cashier;
 
@@ -53,8 +57,9 @@ class UserAccountServiceTest {
         roles = mock(RoleRepository.class);
         encoder = mock(PasswordEncoder.class);
         guard = mock(com.richcomes.garage.auth.service.AdminAccessGuard.class);
+        permissionAudit = mock(AccountPermissionAuditRepository.class);
         service = new UserAccountService(accounts, employees, roles, encoder, VALIDATORS.getValidator(),
-                guard);
+                guard, permissionAudit);
         employee = new Employee();
         ReflectionTestUtils.setField(employee, "id", EMPLOYEE_ID);
         cashier = new Role("CASHIER", "Cashier");
@@ -71,6 +76,55 @@ class UserAccountServiceTest {
     @AfterAll
     static void closeValidatorFactory() {
         VALIDATORS.close();
+    }
+
+    @Test
+    void roleTransitionClearsOldCashierGrantsAndAuditsTheirRevocation() {
+        var account = existingAccount();
+        account.grantDirectPermission(new Permission("vehicle:read", "Read vehicles"));
+        var owner = new Role("OWNER", "Owner");
+        when(roles.findByCode("OWNER")).thenReturn(Optional.of(owner));
+        service.replaceRoles(1L, new AccountRolesUpdateRequest(Set.of("OWNER")), 99L);
+        assertTrue(account.getDirectPermissions().isEmpty());
+        var captor = org.mockito.ArgumentCaptor.forClass(AccountPermissionAuditEvent.class);
+        verify(permissionAudit).save(captor.capture());
+        assertEquals(99L, captor.getValue().getActorId());
+        assertEquals(1L, captor.getValue().getTargetAccountId());
+        assertEquals("vehicle:read", captor.getValue().getPermissionCode());
+        assertFalse(captor.getValue().isGranted());
+        // Promotion and later demotion cannot resurrect a previous grant.
+        service.replaceRoles(1L, new AccountRolesUpdateRequest(Set.of("CASHIER")), 99L);
+        assertTrue(account.getDirectPermissions().isEmpty());
+        verify(permissionAudit, times(1)).save(any());
+    }
+
+    @Test
+    void disablingCashierAuditsAndRemovesDirectGrantsBeforeReactivation() {
+        var account = existingAccount();
+        account.enable();
+        account.grantDirectPermission(new Permission("billing:read", "Read invoice"));
+        service.disableAccount(1L, 99L);
+        assertFalse(account.isEnabled());
+        assertTrue(account.getDirectPermissions().isEmpty());
+        verify(permissionAudit).save(argThat(event ->
+                event.getActorId().equals(99L)
+                && event.getTargetAccountId().equals(1L)
+                && event.getPermissionCode().equals("billing:read")
+                && !event.isGranted()));
+        service.enableAccount(1L);
+        assertTrue(account.isEnabled());
+        assertTrue(account.getDirectPermissions().isEmpty());
+    }
+
+    @Test
+    void redundantRoleReplacementLeavesExistingDirectPermissionsUntouched() {
+        var account = existingAccount();
+        account.grantDirectPermission(new Permission("vehicle:read", "Read vehicles"));
+        service.replaceRoles(1L, new AccountRolesUpdateRequest(Set.of("CASHIER")), 99L);
+        assertEquals(Set.of("vehicle:read"),
+                account.getDirectPermissions().stream().map(Permission::getCode)
+                        .collect(java.util.stream.Collectors.toSet()));
+        verifyNoInteractions(permissionAudit);
     }
 
     @Test
