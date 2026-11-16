@@ -465,6 +465,39 @@ class SecurityFlowTest {
     }
 
     @Test
+    void delegatedCashierCannotActivateCustomerEvenWhenAllowedToEnroll() throws Exception {
+        account.grantDirectPermission(new Permission("customer:register", "Delegated enrollment"));
+        mvc.perform(patch("/api/customer-accounts/51/activate")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+        verify(customerAccountService, never()).activate(any(), any());
+    }
+
+    @Test
+    void customerActivationRequiresCurrentOwnerRoleAndRegistrationPermission() throws Exception {
+        var ownerRole = new Role("OWNER", "Business owner");
+        account.assignRole(ownerRole);
+        mvc.perform(patch("/api/customer-accounts/51/activate")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+        verify(customerAccountService, never()).activate(any(), any());
+
+        ownerRole.grantPermission(new Permission("customer:register", "Enroll customer"));
+        when(customerAccountService.activate(eq(51L), any()))
+                .thenReturn(new com.richcomes.garage.auth.dto.CustomerAccountResponse(
+                        51L, 7L, "customer.new", true));
+        mvc.perform(patch("/api/customer-accounts/51/activate")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enabled").value(true))
+                .andExpect(header().string("Cache-Control", "no-store"));
+        verify(customerAccountService).activate(eq(51L),
+                argThat(principal -> principal.accountId().equals(42L)
+                        && principal.roles().contains("OWNER")
+                        && principal.permissions().contains("customer:register")));
+    }
+
+    @Test
     void ownerDelegationEndpointRequiresOwnerAuthorityAndUsesAuthenticatedActor() throws Exception {
         role.grantPermission(new Permission("customer:delegate_register", "Delegate cashier"));
         mvc.perform(put("/api/accounts/7/permissions/customer-registration")
