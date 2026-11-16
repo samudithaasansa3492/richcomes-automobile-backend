@@ -2,6 +2,9 @@ package com.richcomes.garage.auth.service;
 
 import com.richcomes.garage.auth.dto.CustomerRegistrationDelegationResponse;
 import com.richcomes.garage.auth.entity.UserAccount;
+import com.richcomes.garage.auth.recovery.SecurityAuditEvent;
+import com.richcomes.garage.auth.recovery.SecurityAuditRepository;
+import java.time.Instant;
 import com.richcomes.garage.auth.exception.AccountOperationException;
 import com.richcomes.garage.auth.repository.PermissionRepository;
 import com.richcomes.garage.auth.repository.UserAccountRepository;
@@ -22,12 +25,15 @@ public class CustomerRegistrationDelegationService {
     private final AdminAccessGuard administration;
     private final UserAccountRepository accounts;
     private final PermissionRepository permissions;
+    private final SecurityAuditRepository audit;
 
     public CustomerRegistrationDelegationService(AdminAccessGuard administration,
-            UserAccountRepository accounts, PermissionRepository permissions) {
+            UserAccountRepository accounts, PermissionRepository permissions,
+            SecurityAuditRepository audit) {
         this.administration = administration;
         this.accounts = accounts;
         this.permissions = permissions;
+        this.audit = audit;
     }
 
     public CustomerRegistrationDelegationResponse setAllowed(Long cashierAccountId, boolean allowed,
@@ -54,12 +60,19 @@ public class CustomerRegistrationDelegationService {
 
         var permission = permissions.findByCode("customer:register")
                 .orElseThrow(() -> failure(CUSTOMER_ROLE_NOT_CONFIGURED, "Customer registration permission not configured"));
-        if (allowed) {
-            cashier.grantDirectPermission(permission);
-        } else {
-            cashier.revokeDirectPermission(permission);
+        boolean alreadyAllowed = cashier.getDirectPermissions().stream()
+                .anyMatch(existing -> "customer:register".equals(existing.getCode()));
+        if (alreadyAllowed != allowed) {
+            if (allowed) {
+                cashier.grantDirectPermission(permission);
+            } else {
+                cashier.revokeDirectPermission(permission);
+            }
+            accounts.saveAndFlush(cashier);
+            audit.save(new SecurityAuditEvent(actor.accountId(), cashierAccountId,
+                    allowed ? "CASHIER_REGISTRATION_GRANTED" : "CASHIER_REGISTRATION_REVOKED",
+                    Instant.now()));
         }
-        accounts.saveAndFlush(cashier);
         return new CustomerRegistrationDelegationResponse(cashierAccountId, allowed);
     }
 
