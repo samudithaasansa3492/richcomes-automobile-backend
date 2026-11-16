@@ -41,23 +41,17 @@ public final class AccountAccessPolicy {
         if (account.isCustomer()) return Set.of("customer:self");
         // No accidental ADMIN privilege escalation to business data.
         if (account.getRoles().stream().anyMatch(role -> "ADMIN".equals(role.getCode()))) return Set.of();
-        var granted = new HashSet<>(account.getRoles().stream()
+        // A BUSINESS account receives inherited role permissions ONLY when it
+        // has OWNER authority. This also blocks legacy employee/account grants
+        // accidentally assigned to the shared CASHIER role. Unrecognized future
+        // role permissions remain fail-closed for cashiers.
+        boolean owner = account.getRoles().stream()
+                .anyMatch(role -> "OWNER".equals(role.getCode()));
+        var granted = owner ? new HashSet<>(account.getRoles().stream()
                 .flatMap(role -> role.getPermissions().stream())
                 .map(permission -> permission.getCode())
                 .filter(code -> !"technical:recovery".equals(code) && !"customer:self".equals(code))
-                .collect(Collectors.toSet()));
-        // Enforce OWNER-only delegation even if a database administrator accidentally
-        // grants owner permissions to CASHIER's shared role. Do not let role-wide
-        // CASHIER permissions bypass the individual cashier delegation table.
-        boolean owner = account.getRoles().stream().anyMatch(role -> "OWNER".equals(role.getCode()));
-        if (!owner) {
-            granted.remove("customer:delegate_register");
-            granted.remove("permission:delegate");
-            granted.remove("audit:read");
-            // No cashier obtains any business-module grant from their shared role:
-            // OWNER grants are effective only when recorded against that individual.
-            granted.removeIf(CashierDelegatablePermissions::isDelegatable);
-        }
+                .collect(Collectors.toSet())) : new HashSet<String>();
         if (account.getRoles().size() == 1 && account.getRoles().stream()
                 .allMatch(role -> "CASHIER".equals(role.getCode()))) {
             account.getDirectPermissions().stream()
