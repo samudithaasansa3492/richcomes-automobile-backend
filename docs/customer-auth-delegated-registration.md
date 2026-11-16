@@ -13,7 +13,7 @@
 | --- | --- | --- |
 | POST /api/v1/customers | `customer:register` | Existing Member 2 customer-record creation; staff only |
 | POST /api/customer-accounts | `customer:register` | Enroll existing active customer, disabled by default |
-| PATCH /api/customer-accounts/{id}/activate | `customer:register` | Authorized staff activates after **external identity check** |
+| PATCH /api/customer-accounts/{id}/activate | **OWNER role + `customer:register`** | Only OWNER can activate after independent identity verification; delegated CASHIER cannot activate |
 | PUT /api/accounts/{id}/permissions/customer-registration | `customer:delegate_register` | OWNER grants or revokes a specific CASHIER's registration permission |
 | GET /api/customer/me | `customer:self` | Customer's own limited profile, ID derived from authenticated principal |
 | GET /api/v1/customers/** | `customer:read` | Staff-only customer record searches/details |
@@ -32,7 +32,7 @@
 1. OWNER signs in; Member 2 staff endpoint creates the Customer business record if necessary.
 2. OWNER optionally grants a particular CASHIER via `PUT /api/accounts/42/permissions/customer-registration` body `{"enabled":true}`.
 3. Authorized staff registers existing Customer using `POST /api/customer-accounts` with `{"customerId":7,"username":"customer.one","password":"<secure-initial-password>"}`. Response is disabled, no password.
-4. Staff verifies identity **outside the API** and activates using `PATCH /api/customer-accounts/{accountId}/activate`. The initial secret must be delivered via an approved private channel, not email/chat plaintext or application logs.
+4. Identity is verified by an approved independent process **outside the API** and evidence recorded under the garage's policy. **OWNER (not CASHIER)** activates using `PATCH /api/customer-accounts/{accountId}/activate`. The initial secret must be delivered via an approved private channel, not email/chat plaintext or application logs.
 5. CUSTOMER signs in via existing `POST /api/auth/login`, uses `GET /api/customer/me`; requests for staff-only / other-customer routes are rejected.
 
 ## Observed isolated validation (2026-11-17)
@@ -78,4 +78,8 @@ To preserve meaningful coverage without weakening production security, the featu
 
 The legacy `PUT /api/accounts/{id}/permissions/customer-registration` delegation now **refuses new grants to disabled or inactive CASHIER identities**. OWNER can still revoke a registration permission from an inactive/disabled CASHIER, including an idempotent revoke when no grant exists; permission catalogue lookups are only required for new grants. Three unit regression tests were added. These commits have **not yet been rerun** on this parent PR branch.
 
-**Activation design review remains required**: the same `customer:register` permission authorizes disabled customer enrollment and later activation; a separate identity verification/evidence workflow and secure initial credential delivery process must be approved before production rollout. This change does not itself implement identity verification.
+**Activation design review remains required**: role-level authorization is now split — `customer:register` can be delegated for disabled-account enrollment, but activation requires **OWNER role** plus `customer:register` in both the HTTP security filter and service. This still does **not** provide identity proofing evidence or secure initial credential delivery; these remain mandatory production prerequisites.
+
+## OWNER-only activation hardening (2026-11-17 — pending test rerun)
+
+Both the HTTP authorization filter and the account service now require **OWNER role + current database-backed `customer:register`** for `PATCH /api/customer-accounts/{id}/activate`. A delegated CASHIER may enroll a disabled Customer but must never activate a Customer login. Unit and JWT-filter tests cover delegated CASHIER rejection, OWNER without the permission rejection and authorized OWNER activation. Tests have been committed but **not yet executed** on these new branch heads. This is an authorization safeguard, **not proof of identity verification**; secure independent evidence and customer-controlled initial credentials remain release blockers.
