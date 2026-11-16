@@ -12,7 +12,7 @@ public class SecurityAuditEvent {
     @Column(name = "event_code", nullable = false, length = 64) String eventCode;
     @Column(name = "occurred_at", nullable = false) Instant occurredAt;
     protected SecurityAuditEvent() {}
-    SecurityAuditEvent(Long actor, Long target, String event, Instant time) {
+    public SecurityAuditEvent(Long actor, Long target, String event, Instant time) {
         id = UUID.randomUUID(); actorId = actor; targetId = target; eventCode = event; occurredAt = time;
     }
 }
