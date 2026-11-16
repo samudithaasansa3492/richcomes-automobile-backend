@@ -52,7 +52,9 @@ public class CashierPermissionService {
                 || !CashierDelegatablePermissions.isDelegatable(request.permissionCode())) {
             throw failure(INVALID_REQUEST, "Permission is not eligible for cashier delegation");
         }
-        if (!actor.permissions().contains(request.permissionCode())) {
+        // Grant requires that OWNER possesses the permission. Revocation must
+        // remain possible even when OWNER's own business grant was later removed.
+        if (request.enabled() && !actor.permissions().contains(request.permissionCode())) {
             throw failure(PERMISSION_DELEGATION_FORBIDDEN, "OWNER cannot delegate an unassigned permission");
         }
         // Serialize against account disablement, role changes, and separate
@@ -62,15 +64,18 @@ public class CashierPermissionService {
         if (request.enabled() && (!cashier.isEnabled() || !cashier.getEmployee().isActive())) {
             throw failure(CASHIER_NOT_ELIGIBLE, "Only an active CASHIER can receive permissions");
         }
-        var permission = permissions.findByCode(request.permissionCode())
-                .orElseThrow(() -> failure(INVALID_REQUEST, "Unknown business permission"));
-        boolean alreadyGranted = cashier.getDirectPermissions().stream()
-                .anyMatch(existing -> request.permissionCode().equals(existing.getCode()));
-        if (alreadyGranted != request.enabled()) {
+        var existingGrant = cashier.getDirectPermissions().stream()
+                .filter(permission -> request.permissionCode().equals(permission.getCode()))
+                .findFirst();
+        if (existingGrant.isPresent() != request.enabled()) {
             if (request.enabled()) {
-                cashier.grantDirectPermission(permission);
+                var definition = permissions.findByCode(request.permissionCode())
+                        .orElseThrow(() -> failure(INVALID_REQUEST, "Unknown business permission"));
+                cashier.grantDirectPermission(definition);
             } else {
-                cashier.revokeDirectPermission(permission);
+                // Revoking an existing grant does not require a redundant
+                // permission-catalog lookup. Idempotent revocation is a no-op.
+                cashier.revokeDirectPermission(existingGrant.orElseThrow());
             }
             accounts.saveAndFlush(cashier);
             audit.saveAndFlush(new AccountPermissionAuditEvent(
