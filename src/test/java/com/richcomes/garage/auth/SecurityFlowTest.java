@@ -217,7 +217,36 @@ class SecurityFlowTest {
     }
 
     @Test
+    void accidentalCashierEmployeeAndAccountGrantsRemainDeniedEvenWithOldJwt() throws Exception {
+        // Old migrations do not grant these to CASHIER, but a later accidental
+        // role-wide grant must NEVER create a staff-administrator bypass.
+        role.grantPermission(new Permission("employee:create", "Unsafe staff grant"));
+        role.grantPermission(new Permission("employee:update", "Unsafe staff grant"));
+        role.grantPermission(new Permission("employee:deactivate", "Unsafe staff grant"));
+        role.grantPermission(new Permission("account:read", "Unsafe account grant"));
+        role.grantPermission(new Permission("account:create", "Unsafe account grant"));
+        role.grantPermission(new Permission("account:manage", "Unsafe account grant"));
+        // A malformed direct grant must not bypass the OWNER-only boundary either.
+        account.grantDirectPermission(new Permission("account:manage", "Unapproved direct grant"));
+        for (var request : java.util.List.of(
+                get("/api/employees"), post("/api/employees"),
+                put("/api/employees/5"), patch("/api/employees/5/deactivate"),
+                get("/api/accounts"), post("/api/accounts"),
+                put("/api/accounts/5/roles"), patch("/api/accounts/5/disable"),
+                patch("/api/accounts/5/enable"))) {
+            mvc.perform(request.header("Authorization", "Bearer " + token))
+                    .andExpect(status().isForbidden());
+        }
+        mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.permissions").isEmpty());
+        verifyNoInteractions(accountService);
+    }
+
+    @Test
     void employeeReadRequiresReadPermission() throws Exception {
+        // The OWNER owns administrative privileges; CASHIER never inherits them.
+        account.assignRole(new Role("OWNER", "Owner"));
         mvc.perform(get("/api/employees").header("Authorization", "Bearer " + token)).andExpect(status().isOk());
         role.revokePermission(new Permission("employee:read", "Read"));
         mvc.perform(get("/api/employees").header("Authorization", "Bearer " + token))
@@ -226,6 +255,8 @@ class SecurityFlowTest {
 
     @Test
     void eachEmployeeMutationRequiresItsSpecificPermission() throws Exception {
+        // The OWNER owns administrative privileges; CASHIER never inherits them.
+        account.assignRole(new Role("OWNER", "Owner"));
         mvc.perform(post("/api/employees").header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
         role.grantPermission(new Permission("employee:create", "Create"));
         mvc.perform(post("/api/employees").header("Authorization", "Bearer " + token)).andExpect(status().isOk());
@@ -313,6 +344,8 @@ class SecurityFlowTest {
 
     @Test
     void accountReadPermissionDoesNotGrantManagement() throws Exception {
+        // The OWNER owns administrative privileges; CASHIER never inherits them.
+        account.assignRole(new Role("OWNER", "Owner"));
         role.grantPermission(new Permission("account:read", "Read accounts"));
         when(accountService.listAccounts(0, 20)).thenReturn(new com.richcomes.garage.auth.dto.AccountPageResponse(
                 java.util.List.of(), 0, 20, 0, 0));
@@ -325,6 +358,8 @@ class SecurityFlowTest {
 
     @Test
     void managementUsesAuthenticatedActorAndSafeDomainErrors() throws Exception {
+        // The OWNER owns administrative privileges; CASHIER never inherits them.
+        account.assignRole(new Role("OWNER", "Owner"));
         role.grantPermission(new Permission("account:manage", "Manage accounts"));
         when(accountService.disableAccount(7L, 42L)).thenThrow(new com.richcomes.garage.auth.exception.AccountOperationException(
                 com.richcomes.garage.auth.exception.AccountOperationException.Code.LAST_ACTIVE_OWNER,
@@ -346,6 +381,8 @@ class SecurityFlowTest {
 
     @Test
     void accountCreationReturnsLocationWithoutPassword() throws Exception {
+        // The OWNER owns administrative privileges; CASHIER never inherits them.
+        account.assignRole(new Role("OWNER", "Owner"));
         role.grantPermission(new Permission("account:create", "Create account"));
         when(accountService.createAccount(any())).thenReturn(new com.richcomes.garage.auth.dto.AccountResponse(
                 7L, employee.getId(), "new.account", false, java.util.Set.of("CASHIER"), null, null));
@@ -361,6 +398,8 @@ class SecurityFlowTest {
 
     @Test
     void malformedAccountRequestsDoNotExposeInput() throws Exception {
+        // The OWNER owns administrative privileges; CASHIER never inherits them.
+        account.assignRole(new Role("OWNER", "Owner"));
         role.grantPermission(new Permission("account:create", "Create account"));
         mvc.perform(post("/api/accounts").header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"secret\"}"))
