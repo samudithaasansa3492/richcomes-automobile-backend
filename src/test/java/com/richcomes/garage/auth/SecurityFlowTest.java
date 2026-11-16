@@ -368,6 +368,15 @@ class SecurityFlowTest {
     }
 
     @Test
+    void unconfiguredBusinessCategoryRouteIsDeniedEvenToAuthenticatedStaff() throws Exception {
+        // Category module routes require a separately approved permission mapping.
+        // Do not make them public or bypass JWT authentication to fix an obsolete 200 test.
+        mvc.perform(get("/api/service-categories")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void customerAndDelegationRoutesDenyAnonymousOrUndelegatedCashier() throws Exception {
         mvc.perform(post("/api/customer-accounts")
                 .contentType(MediaType.APPLICATION_JSON).content("{}"))
