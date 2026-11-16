@@ -46,6 +46,14 @@ public final class AccountAccessPolicy {
                 .map(permission -> permission.getCode())
                 .filter(code -> !"technical:recovery".equals(code) && !"customer:self".equals(code))
                 .collect(Collectors.toSet()));
+        // Enforce OWNER-only delegation even if a database administrator accidentally
+        // grants owner permissions to CASHIER's shared role. Do not let role-wide
+        // CASHIER permissions bypass the individual cashier delegation table.
+        boolean owner = account.getRoles().stream().anyMatch(role -> "OWNER".equals(role.getCode()));
+        if (!owner) {
+            granted.remove("customer:delegate_register");
+            granted.remove("customer:register");
+        }
         // Direct permissions never confer role or generic business data access.
         // A cashier receives only the specifically delegated registration action.
         if (account.getRoles().size() == 1 && account.getRoles().stream()
