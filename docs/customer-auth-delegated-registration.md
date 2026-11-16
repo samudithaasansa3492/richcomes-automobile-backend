@@ -61,3 +61,14 @@ A clean detached Codespaces worktree at source commit `f02106a7372a5856bc2706d54
 ## Migration dependencies
 
 V21 follows V17 identity tables, V18 seeds, V19 OWNER split and V20 recovery schema. `scripts/check-flyway-source-versions.py` and `scripts/validate-flyway-isolated.sh` are extended to include V21 in this branch only. They are **not** evidence that V21 passed until actually run.
+
+## Full-context finding and test separation (2026-11-17)
+
+Codespaces executed the regression suite at `c33e4de5eb56de3f53b32a3a193f169c034cd9cc`: **236 tests PASSED**, zero failures/errors/skips. In `scripts/validate-spring-context-isolated.sh` the full application context loaded with local PostgreSQL 17.12 and **all 21 Flyway migrations validated**. The context-load test passed; the legacy `ServiceCategoryControllerTest` expected HTTP 200 on an **anonymous** `GET /api/service-categories`, but the JWT-protected server correctly returned **401**. Thus overall full-context run was 1 pass/1 failure: a test-versus-security expectation mismatch, not a Flyway or context-init problem.
+
+To preserve meaningful coverage without weakening production security, the feature branch now:
+- Asserts that anonymous and invalid-bearer service-category requests return HTTP 401 in the full-context test.
+- Keeps a separate, filter-free MVC slice test for controller mapping and HTTP 200 with mocked category service.
+- Asserts that even authenticated CASHIER cannot use the unmapped service-category route (HTTP 403) until the module's permission matrix is reviewed.
+
+**Still blocked:** OWNER and authorized CASHIER cannot use service-category endpoints in the actual secured application until those endpoints receive explicit, reviewed permissions and audited delegation. Do not declare full business-module authorization complete or make these routes `permitAll` just to pass tests. The three new/updated tests are awaiting a clean rerun.
