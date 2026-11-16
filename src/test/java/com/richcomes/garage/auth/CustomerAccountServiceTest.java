@@ -94,6 +94,26 @@ class CustomerAccountServiceTest {
         assertTrue(account.isEnabled());
     }
 
+    @Test void delegatedCashierCanEnrollButCannotActivateCustomerLogin() {
+        var cashier = new AccountPrincipal(61L, null, "cashier.one",
+                Set.of("CASHIER"), Set.of("customer:register"));
+        var denied = assertThrows(AccountOperationException.class,
+                () -> service.activate(4L, cashier));
+        assertEquals(AccountOperationException.Code.CUSTOMER_REGISTRATION_NOT_ALLOWED,
+                denied.getCode());
+        verifyNoInteractions(accounts, customers, roles, passwords, audit);
+    }
+
+    @Test void ownerWithoutRegistrationAuthorityCannotActivateCustomerLogin() {
+        var missingPermission = new AccountPrincipal(51L, null, "owner.one",
+                Set.of("OWNER"), Set.of());
+        var denied = assertThrows(AccountOperationException.class,
+                () -> service.activate(4L, missingPermission));
+        assertEquals(AccountOperationException.Code.CUSTOMER_REGISTRATION_NOT_ALLOWED,
+                denied.getCode());
+        verifyNoInteractions(accounts, customers, roles, passwords, audit);
+    }
+
     @Test void rejectsWeakPasswordBeforeDatabaseAccess() {
         var bad = new CustomerAccountCreateRequest(7L, "customer.one", "short");
         assertEquals(AccountOperationException.Code.INVALID_REQUEST,
