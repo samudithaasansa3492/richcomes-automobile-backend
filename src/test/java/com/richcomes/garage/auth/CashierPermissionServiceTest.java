@@ -115,6 +115,27 @@ class CashierPermissionServiceTest {
         verifyNoInteractions(audit);
     }
 
+    @Test void ownerMayRevokeExistingGrantEvenWhenOwnBusinessRightHasBeenRemoved() {
+        var permission = new Permission("vehicle:read", "Read vehicles");
+        cashier.grantDirectPermission(permission);
+        cashier.disable();
+        when(accounts.findOneById(7L)).thenReturn(Optional.of(cashier));
+        // OWNER keeps delegated-management authority but no longer has vehicle:read.
+        var revokingOwner = new AccountPrincipal(99L, null, "owner.one",
+                Set.of("OWNER"), Set.of("permission:delegate"));
+        var result = service.change(7L,
+                new CashierPermissionChangeRequest("vehicle:read", false), revokingOwner);
+        assertTrue(result.grantedPermissions().isEmpty());
+        assertFalse(cashier.getDirectPermissions().contains(permission));
+        verify(definitions, never()).findByCode(anyString());
+        verify(accounts).saveAndFlush(cashier);
+        var capture = ArgumentCaptor.forClass(
+                com.richcomes.garage.auth.entity.AccountPermissionAuditEvent.class);
+        verify(audit).saveAndFlush(capture.capture());
+        assertEquals("vehicle:read", capture.getValue().getPermissionCode());
+        assertFalse(capture.getValue().isGranted());
+    }
+
     @Test void disabledCashierCanHavePermissionRevokedButNotGranted() {
         cashier.disable();
         when(accounts.findOneById(7L)).thenReturn(Optional.of(cashier));
