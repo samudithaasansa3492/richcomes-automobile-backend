@@ -52,3 +52,12 @@ This is a map of implemented controller methods observed on the stacked feature 
 ## Default-deny rule
 
 Any URL/method absent from the exact Spring Security allowlist, including unimplemented writes or future API additions, must remain denied until its corresponding module owner and OWNER/CASHIER permission policy are reviewed. Never mark an endpoint public simply to make a controller test pass.
+
+
+## Conservative high-impact CASHIER boundary — pre-approval decision (2026-11-17)
+
+Because the module owners have **not** approved CASHIER access to financial/PII and destructive operations, the runtime `CashierDelegatablePermissions.ALLOWED` list now *excludes* `customer:read`, `customer:manage`, `billing:read`, `report:read`, `report:export`, `service:delete`, `history:delete`, `reminder:delete`, and `notification:delete`. These remain **OWNER-accessible** through their existing role permissions and `SecurityConfig` route mappings. No SQL migration or backend module-controller routes were removed.
+
+The **effective permission filter** also ignores historical CASHIER direct-grant rows for these nine operations, even when already persisted, and does not trust role-wide grants or JWT claims. The OWNER's delegation API refuses new grants, but accepts *revocation only* of those known legacy codes, with an audit event on actual change and idempotent no-op when already absent. The endpoint response omits ineffective legacy permissions; an OWNER should plan an audit/cleanup of old rows before wider rollout.
+
+This is a safe **default-deny policy while waiting for module-owner signoff**, not an assertion that the final permission matrix has been approved. Before expanding the allowlist, explicitly document business need, least privilege, audit expectations, and field-level data restrictions. Existing alert/reminder sending actions remain individually delegatable, so outbound communication abuse controls still require module-owner review. The new code and negative-path tests require a fresh Java 21 / disposable PostgreSQL validation on the latest head.
