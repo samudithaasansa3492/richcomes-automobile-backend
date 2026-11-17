@@ -104,7 +104,8 @@ class CustomerAccountAccessPolicyTest {
         for (String code : Set.of("customer:read", "customer:manage",
                 "billing:read", "report:read", "report:export",
                 "service:delete", "history:delete", "reminder:delete",
-                "notification:delete")) {
+                "notification:delete", "reminder:read", "reminder:create",
+                "reminder:manage", "notification:read", "notification:send")) {
             cashier.grantDirectPermission(new Permission(code, "Unapproved legacy grant"));
             cashierRole.grantPermission(new Permission(code, "Unsafe shared role grant"));
         }
