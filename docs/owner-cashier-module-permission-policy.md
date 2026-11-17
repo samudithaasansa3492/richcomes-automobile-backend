@@ -56,3 +56,10 @@ Earlier baseline **252/252 selected regression tests, 3/3 full-context tests, V1
 ## Live JWT → JPA authorization smoke path (newer than the last PASS)
 
 The opt-in `CashierPermissionPostgresIT` now also uses a signed bearer token, the **real Spring Security filter chain**, and the real `GET /api/v1/vehicles` Controller backed by the disposable PostgreSQL database. It verifies an existing token is **403 before grant**, **200 after committed OWNER grant**, **200 after a rolled-back revoke**, **403 after committed revoke**, **401 while the account is disabled**, and **403 after re-enable without a renewed grant**. No permission values are trusted from JWT claims. These additional assertions require rerunning the isolated Spring context runner; the previously observed PASS belongs to the older integration test.
+
+
+## Strict high-impact permission default deny (2026-11-17, pending rerun)
+
+Pending the respective business owners' explicit approval, nine sensitive authorities are **not delegatable to CASHIER** even where an accidental shared-role or previously persisted account-level grant exists: `customer:read`, `customer:manage`, `billing:read`, `report:read`, `report:export`, `service:delete`, `history:delete`, `reminder:delete`, `notification:delete`. OWNER keeps these existing seeded rights; Spring Security continues to route-protect their endpoints. The OWNER can still remove a pre-existing grant for one of those nine exact codes through the audited delegation API, but cannot grant it anew. Other individually approved operational permissions, including `vehicle:read`, remain available to delegate.
+
+This block is conservative **until business policy approval**, not a substitute for review of remaining PII visibility or outbound notification/reminder sends. Tests for rejected grants, stale direct grants, JWT access denial and audited cleanup have been added, but the new source commit has **not** yet passed regression or isolated Spring context tests.
