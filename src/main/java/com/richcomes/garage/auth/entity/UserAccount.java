@@ -88,12 +88,59 @@ public class UserAccount {
     @Column(name = "recovery_last_sent_at")
     private Instant recoveryLastSentAt;
 
+    // CUSTOMER-only proof metadata; never store scanned IDs, document numbers
+    // or a credential in this row. The reference points to a controlled
+    // garage verification case, not the customer's raw identity document.
+    @Column(name = "customer_verified_at")
+    private Instant customerVerifiedAt;
+    @Column(name = "customer_verified_by")
+    private Long customerVerifiedBy;
+    @Column(name = "customer_verification_ref", length = 64)
+    private String customerVerificationRef;
+    @Column(name = "customer_verified_email", length = 254)
+    private String customerVerifiedEmail;
+    @Column(name = "customer_password_set_at")
+    private Instant customerPasswordSetAt;
+
     public boolean isTechnical() { return "TECHNICAL".equals(identityKind); }
     public boolean isCustomer() { return "CUSTOMER".equals(identityKind); }
     public String getIdentityKind() { return identityKind; }
     public long getCredentialVersion() { return credentialVersion; }
     @JsonIgnore public String getRecoveryEmail() { return recoveryEmail; }
     @JsonIgnore public Instant getRecoveryLastSentAt() { return recoveryLastSentAt; }
+    @JsonIgnore public Instant getCustomerVerifiedAt() { return customerVerifiedAt; }
+    @JsonIgnore public Instant getCustomerPasswordSetAt() { return customerPasswordSetAt; }
+    @JsonIgnore public boolean hasCustomerVerifiedIdentity() {
+        return isCustomer() && customer != null && customerVerifiedAt != null
+                && customerVerifiedBy != null && customerVerificationRef != null
+                && customerVerifiedEmail != null && customer.getEmail() != null
+                && customerVerifiedEmail.equalsIgnoreCase(customer.getEmail().strip());
+    }
+    @JsonIgnore public boolean hasCustomerChosenPassword() {
+        return isCustomer() && customerPasswordSetAt != null;
+    }
+    public void recordCustomerIdentityProof(Long verifier, String reference, String email, Instant at) {
+        if (!isCustomer() || customer == null || verifier == null || at == null
+                || reference == null || !reference.matches("[A-Z0-9][A-Z0-9_-]{7,63}")
+                || email == null || customer.getEmail() == null
+                || !email.equalsIgnoreCase(customer.getEmail().strip())
+                || customerPasswordSetAt != null) {
+            throw new IllegalArgumentException("Invalid customer identity attestation");
+        }
+        customerVerifiedAt = at;
+        customerVerifiedBy = verifier;
+        customerVerificationRef = reference;
+        customerVerifiedEmail = email.strip().toLowerCase(Locale.ROOT);
+        // Any older invitation and JWT become invalid when proof is reissued.
+        revokeTokens();
+    }
+    public void setCustomerInitialPassword(String encodedHash, Instant at) {
+        if (!hasCustomerVerifiedIdentity() || customerPasswordSetAt != null || isEnabled() || at == null) {
+            throw new IllegalStateException("Customer must be verified and disabled");
+        }
+        resetPasswordHash(encodedHash);
+        customerPasswordSetAt = at;
+    }
     public void recordRecoveryDelivery(Instant time) { recoveryLastSentAt = time; }
     public void verifyRecoveryEmail(String email) { recoveryEmail = Objects.requireNonNull(email); }
     public void revokeTokens() { credentialVersion = Math.incrementExact(credentialVersion); }
