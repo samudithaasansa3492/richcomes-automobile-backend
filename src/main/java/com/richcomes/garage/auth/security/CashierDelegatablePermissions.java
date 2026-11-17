@@ -10,17 +10,21 @@ import java.util.Set;
 public final class CashierDelegatablePermissions {
     private CashierDelegatablePermissions() {}
 
+    // Conservative pre-approval policy. Never delegate financial reporting,
+    // customer-record browsing/management or destructive DELETE actions.
+    // This applies equally to previously persisted direct permission rows:
+    // AccountAccessPolicy filters effective permissions using this same set.
+    // New or broader actions require explicit security and business approval.
     public static final Set<String> ALLOWED = Set.of(
-            "customer:register", "customer:read", "customer:manage",
+            "customer:register",
             "vehicle:read", "vehicle:create", "vehicle:update",
             "appointment:read", "appointment:create", "appointment:manage",
             "inventory:read", "inventory:create", "inventory:update",
-            "service:read", "service:create", "service:update", "service:delete",
-            "billing:read", "billing:calculate",
-            "report:read", "report:export",
-            "history:read", "history:create", "history:update", "history:delete",
-            "reminder:read", "reminder:create", "reminder:manage", "reminder:delete",
-            "notification:read", "notification:send", "notification:delete"
+            "service:read", "service:create", "service:update",
+            "billing:calculate",
+            "history:read", "history:create", "history:update",
+            "reminder:read", "reminder:create", "reminder:manage",
+            "notification:read", "notification:send"
     );
     public static boolean isDelegatable(String code) {
         return code != null && ALLOWED.contains(code);
