@@ -34,14 +34,13 @@ expected = {
     21: "V21__customer_accounts_and_delegated_registration.sql",
     22: "V22__seed_owner_delegatable_business_permissions.sql",
     23: "V23__verified_customer_onboarding.sql",
-    24: "V24__protect_public_flyway_history.sql",
 }
 for version, name in expected.items():
     if versions.get(version) != [name]:
         errors.append(f"Incorrect V{version} path: expected {name}")
 
-if set(versions) != set(range(1, 25)):
-    errors.append(f"Expected exactly versions V1–V24; found {sorted(versions)}")
+if set(versions) != set(range(1, 24)):
+    errors.append(f"Expected exactly versions V1–V23; found {sorted(versions)}")
 
 print(f"Source-only Flyway filename audit: {len(files)} files")
 for version in sorted(versions):
