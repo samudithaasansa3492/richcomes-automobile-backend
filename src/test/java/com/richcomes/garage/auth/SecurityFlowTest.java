@@ -460,7 +460,7 @@ class SecurityFlowTest {
         when(customerRepository.findById(9L)).thenReturn(Optional.of(customer));
         // Initial-password setup increments credentialVersion, intentionally
         // invalidating the bearer token minted in the shared @BeforeEach.
-        token = tokens.issue(42L).accessToken();
+        token = tokens.issue(42L, customerIdentity.getCredentialVersion()).accessToken();
 
         mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
                 .content("{\"username\":\"customer.one\",\"password\":\"" + PASSWORD + "\"}"))
