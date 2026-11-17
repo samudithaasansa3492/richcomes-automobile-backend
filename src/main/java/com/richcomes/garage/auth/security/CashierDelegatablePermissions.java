@@ -26,7 +26,20 @@ public final class CashierDelegatablePermissions {
             "reminder:read", "reminder:create", "reminder:manage",
             "notification:read", "notification:send"
     );
+    // Disallowed before release review, but older persisted account grants
+    // may need to be explicitly revoked with an immutable audit record.
+    // They cannot authorize requests, and can never be granted anew.
+    public static final Set<String> OWNER_ONLY = Set.of(
+            "customer:read", "customer:manage", "billing:read",
+            "report:read", "report:export", "service:delete",
+            "history:delete", "reminder:delete", "notification:delete"
+    );
+
     public static boolean isDelegatable(String code) {
         return code != null && ALLOWED.contains(code);
+    }
+
+    public static boolean isRevocable(String code) {
+        return isDelegatable(code) || (code != null && OWNER_ONLY.contains(code));
     }
 }
