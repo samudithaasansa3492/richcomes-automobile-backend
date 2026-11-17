@@ -48,8 +48,12 @@ public class CashierPermissionService {
     public CashierPermissionsResponse change(Long accountId, CashierPermissionChangeRequest request,
             AccountPrincipal actor) {
         requireOwner(actor);
+        // Only approved actions can be newly granted. Inert high-impact
+        // grants left by an earlier policy may still be revoked and audited.
         if (request == null || request.enabled() == null
-                || !CashierDelegatablePermissions.isDelegatable(request.permissionCode())) {
+                || (request.enabled()
+                    ? !CashierDelegatablePermissions.isDelegatable(request.permissionCode())
+                    : !CashierDelegatablePermissions.isRevocable(request.permissionCode()))) {
             throw failure(INVALID_REQUEST, "Permission is not eligible for cashier delegation");
         }
         // Grant requires that OWNER possesses the permission. Revocation must
