@@ -22,9 +22,7 @@ public final class CashierDelegatablePermissions {
             "inventory:read", "inventory:create", "inventory:update",
             "service:read", "service:create", "service:update",
             "billing:calculate",
-            "history:read", "history:create", "history:update",
-            "reminder:read", "reminder:create", "reminder:manage",
-            "notification:read", "notification:send"
+            "history:read", "history:create", "history:update"
     );
     // Disallowed before release review, but older persisted account grants
     // may need to be explicitly revoked with an immutable audit record.
@@ -32,7 +30,13 @@ public final class CashierDelegatablePermissions {
     public static final Set<String> OWNER_ONLY = Set.of(
             "customer:read", "customer:manage", "billing:read",
             "report:read", "report:export", "service:delete",
-            "history:delete", "reminder:delete", "notification:delete"
+            "history:delete",
+            // Reminder/notification views can expose recipients and personal
+            // details. Mutation routes can queue arbitrary messages; keep
+            // both modules OWNER-only until module-owner privacy/send review.
+            "reminder:read", "reminder:create", "reminder:manage",
+            "reminder:delete", "notification:read", "notification:send",
+            "notification:delete"
     );
 
     public static boolean isDelegatable(String code) {
