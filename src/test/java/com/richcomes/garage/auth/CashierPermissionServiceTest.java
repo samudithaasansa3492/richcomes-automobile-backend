@@ -139,6 +139,35 @@ class CashierPermissionServiceTest {
         assertFalse(capture.getValue().isGranted());
     }
 
+    @Test void ownerCanAuditRevokePreviouslyPersistedOwnerOnlyGrantWithoutRegranting() {
+        var legacy = new Permission("report:read", "Unapproved historical grant");
+        cashier.grantDirectPermission(legacy);
+        when(accounts.findOneById(7L)).thenReturn(Optional.of(cashier));
+        var ownerWithDelegationOnly = new AccountPrincipal(99L, null, "owner.one",
+                Set.of("OWNER"), Set.of("permission:delegate"));
+
+        assertFalse(AccountAccessPolicy.effectivePermissions(cashier).contains("report:read"));
+
+        var result = service.change(7L,
+                new CashierPermissionChangeRequest("report:read", false),
+                ownerWithDelegationOnly);
+        assertTrue(result.grantedPermissions().isEmpty());
+        assertTrue(cashier.getDirectPermissions().isEmpty());
+        verify(definitions, never()).findByCode(anyString());
+        verify(accounts).saveAndFlush(cashier);
+        var captured = ArgumentCaptor.forClass(
+                com.richcomes.garage.auth.entity.AccountPermissionAuditEvent.class);
+        verify(audit).saveAndFlush(captured.capture());
+        assertEquals("report:read", captured.getValue().getPermissionCode());
+        assertFalse(captured.getValue().isGranted());
+
+        // The cleanup request is idempotent and cannot regrant report access.
+        assertTrue(service.change(7L,
+                new CashierPermissionChangeRequest("report:read", false),
+                ownerWithDelegationOnly).grantedPermissions().isEmpty());
+        verify(audit, times(1)).saveAndFlush(any());
+    }
+
     @Test void disabledCashierCanHavePermissionRevokedButNotGranted() {
         cashier.disable();
         when(accounts.findOneById(7L)).thenReturn(Optional.of(cashier));
