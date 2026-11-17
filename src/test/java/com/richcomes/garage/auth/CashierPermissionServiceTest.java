@@ -93,7 +93,9 @@ class CashierPermissionServiceTest {
                 "technical:recovery", "permission:delegate", "super:power",
                 "customer:read", "customer:manage", "service:delete",
                 "billing:read", "report:read", "report:export",
-                "history:delete", "reminder:delete", "notification:delete")) {
+                "history:delete", "reminder:delete", "notification:delete",
+                "reminder:read", "reminder:create", "reminder:manage",
+                "notification:read", "notification:send")) {
             var error = assertThrows(AccountOperationException.class,
                     () -> service.change(7L, new CashierPermissionChangeRequest(code, true), owner));
             assertEquals(AccountOperationException.Code.INVALID_REQUEST, error.getCode());
