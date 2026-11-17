@@ -581,6 +581,33 @@ class SecurityFlowTest {
     }
 
     @Test
+    void unapprovedFinancialCustomerAndDeleteAuthoritiesNeverReachCashierJwt() throws Exception {
+        for (String code : java.util.Set.of(
+                "customer:read", "customer:manage", "billing:read", "report:read",
+                "report:export", "service:delete", "history:delete",
+                "reminder:delete", "notification:delete")) {
+            var unsafe = new Permission(code, "Legacy direct and shared grant");
+            account.grantDirectPermission(unsafe);
+            role.grantPermission(unsafe);
+        }
+        for (var forbidden : java.util.List.of(
+                get("/api/v1/customers"),
+                get("/api/v1/billing/invoices/7"),
+                get("/api/v1/reports/financial"),
+                get("/api/v1/reports/financial/pdf"),
+                delete("/api/service-jobs/7"),
+                delete("/api/v1/history/7"),
+                delete("/api/v1/reminders/7"),
+                delete("/api/v1/notifications/7"))) {
+            mvc.perform(forbidden.header("Authorization", "Bearer " + token))
+                    .andExpect(status().isForbidden());
+        }
+        mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.permissions").isEmpty());
+    }
+
+    @Test
     void auditAndPermissionDelegationCannotBeObtainedThroughCashierRole() throws Exception {
         role.grantPermission(new Permission("permission:delegate", "Unsafe global grant"));
         role.grantPermission(new Permission("audit:read", "Unsafe global grant"));
