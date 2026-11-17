@@ -114,9 +114,9 @@ flyway() {
 verify_count() {
   local db="$1" count
   count="$(docker exec "$CONTAINER" psql -U postgres -d "richcomes_${db}" -Atc \
-    "SELECT COUNT(*) FROM public.flyway_schema_history WHERE success AND version ~ '^[0-9]+$' AND version::int BETWEEN 1 AND 23")"
-  test "$count" = 23 || { echo "FAIL: ${db} migration count=${count}"; exit 1; }
-  echo "PASS: ${db} contains 23 successful Flyway migrations"
+    "SELECT COUNT(*) FROM public.flyway_schema_history WHERE success AND version ~ '^[0-9]+$' AND version::int BETWEEN 1 AND 24")"
+  test "$count" = 24 || { echo "FAIL: ${db} migration count=${count}"; exit 1; }
+  echo "PASS: ${db} contains 24 successful Flyway migrations"
 }
 
 verify_customer_security() {
@@ -184,10 +184,24 @@ verify_business_delegation() {
   echo "PASS: ${db} explicit OWNER business permissions, no CASHIER wildcard grants, audit RLS"
 }
 
-echo '=== Fresh install V1-V22 ==='
+verify_flyway_metadata_security() {
+  local db="$1" verdict
+  verdict="$(docker exec "$CONTAINER" psql -U postgres -d "richcomes_${db}" -Atc "
+    SELECT CASE WHEN
+      (SELECT relrowsecurity FROM pg_class WHERE oid='public.flyway_schema_history'::regclass)
+      AND NOT has_table_privilege('anon', 'public.flyway_schema_history', 'SELECT')
+      AND NOT has_table_privilege('authenticated', 'public.flyway_schema_history', 'SELECT')
+    THEN 'PASS' ELSE 'FAIL' END
+  ")"
+  test "$verdict" = PASS || { echo "FAIL: ${db} exposed Flyway migration metadata"; exit 1; }
+  echo "PASS: ${db} Flyway history RLS enabled and browser roles denied"
+}
+
+echo '=== Fresh install V1-V24 ==='
 flyway fresh latest
 verify_count fresh
 verify_customer_security fresh
+verify_flyway_metadata_security fresh
 verify_business_delegation fresh
 
 echo '=== Simulate upgrade V1-V14 to V22 ==='
@@ -213,6 +227,7 @@ SQL
 flyway upgrade latest
 verify_count upgrade
 verify_customer_security upgrade
+verify_flyway_metadata_security upgrade
 verify_business_delegation upgrade
 owner_count="$(docker exec "$CONTAINER" psql -U postgres -d richcomes_upgrade -Atc \
   "SELECT count(*) FROM garage.user_accounts a JOIN garage.user_account_roles ar ON ar.user_account_id=a.id JOIN garage.roles r ON r.id=ar.role_id JOIN garage.employees e ON e.id=a.employee_id WHERE a.username='validation.owner' AND a.enabled AND a.identity_kind='BUSINESS' AND r.code='OWNER' AND e.position='OWNER'")"
