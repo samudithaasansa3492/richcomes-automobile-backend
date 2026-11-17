@@ -31,7 +31,8 @@ public class SecurityConfig {
                         .jwt(jwt -> jwt.decoder(decoder).jwtAuthenticationConverter(converter)))
                 .authorizeHttpRequests(access -> access
                         .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/recovery/request",
-                                "/api/auth/recovery/reset", "/api/auth/recovery/email/confirm").permitAll()
+                                "/api/auth/recovery/reset", "/api/auth/recovery/email/confirm",
+                                "/api/auth/recovery/initial-password").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/recovery/email").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/technical/recovery/request")
                             .hasAuthority("technical:recovery")
@@ -43,6 +44,17 @@ public class SecurityConfig {
                         // Require an OWNER principal in addition to the current
                         // server-side customer:register authority (never JWT claims).
                         .requestMatchers(HttpMethod.PATCH, "/api/customer-accounts/{id}/activate")
+                            .access((authentication, context) -> {
+                                var current = authentication.get();
+                                boolean permitted = current != null && current.isAuthenticated()
+                                        && current.getPrincipal()
+                                            instanceof com.richcomes.garage.auth.security.AccountPrincipal principal
+                                        && principal.roles().contains("OWNER")
+                                        && principal.permissions().contains("customer:register");
+                                return new org.springframework.security.authorization.AuthorizationDecision(permitted);
+                            })
+                        // Proof attestation and invitation are never CASHIER-delegatable.
+                        .requestMatchers(HttpMethod.POST, "/api/customer-accounts/{id}/verify-and-invite")
                             .access((authentication, context) -> {
                                 var current = authentication.get();
                                 boolean permitted = current != null && current.isAuthenticated()
