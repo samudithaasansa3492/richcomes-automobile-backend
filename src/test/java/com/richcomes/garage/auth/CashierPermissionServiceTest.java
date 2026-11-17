@@ -90,7 +90,10 @@ class CashierPermissionServiceTest {
 
     @Test void securityAdministrativeAndUnknownPermissionsCannotBeDelegated() {
         for (var code : Set.of("audit:read", "account:manage", "employee:create",
-                "technical:recovery", "permission:delegate", "super:power")) {
+                "technical:recovery", "permission:delegate", "super:power",
+                "customer:read", "customer:manage", "service:delete",
+                "billing:read", "report:read", "report:export",
+                "history:delete", "reminder:delete", "notification:delete")) {
             var error = assertThrows(AccountOperationException.class,
                     () -> service.change(7L, new CashierPermissionChangeRequest(code, true), owner));
             assertEquals(AccountOperationException.Code.INVALID_REQUEST, error.getCode());
@@ -101,7 +104,7 @@ class CashierPermissionServiceTest {
     @Test void ownerCannotDelegateBusinessPermissionTheyDoNotPossess() {
         var error = assertThrows(AccountOperationException.class,
                 () -> service.change(7L,
-                        new CashierPermissionChangeRequest("billing:read", true), owner));
+                        new CashierPermissionChangeRequest("inventory:read", true), owner));
         assertEquals(AccountOperationException.Code.PERMISSION_DELEGATION_FORBIDDEN, error.getCode());
         verifyNoInteractions(guard, accounts, definitions, audit);
     }
