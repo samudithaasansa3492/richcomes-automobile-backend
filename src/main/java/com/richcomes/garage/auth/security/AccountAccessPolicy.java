@@ -25,6 +25,8 @@ public final class AccountAccessPolicy {
         if (account.isCustomer()) {
             return account.getEmployee() == null && account.getCustomer() != null
                     && account.getCustomer().getStatus() == CustomerStatus.ACTIVE
+                    && account.hasCustomerVerifiedIdentity()
+                    && account.hasCustomerChosenPassword()
                     && account.getRoles().size() == 1
                     && account.getRoles().stream().allMatch(role -> "CUSTOMER".equals(role.getCode()));
         }
