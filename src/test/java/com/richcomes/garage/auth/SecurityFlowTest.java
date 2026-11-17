@@ -450,6 +450,9 @@ class SecurityFlowTest {
         customer.setEmail("customer@example.invalid");
         var customerIdentity = UserAccount.customer(customer, "customer.one", passwords.encode(PASSWORD),
                 new Role("CUSTOMER", "Customer identity"));
+        customerIdentity.recordCustomerIdentityProof(51L, "CASE-00123",
+                customer.getEmail(), java.time.Instant.now());
+        customerIdentity.setCustomerInitialPassword(passwords.encode(PASSWORD), java.time.Instant.now());
         customerIdentity.enable();
         ReflectionTestUtils.setField(customerIdentity, "id", 42L);
         when(accounts.findOneById(42L)).thenReturn(Optional.of(customerIdentity));
@@ -490,7 +493,7 @@ class SecurityFlowTest {
         account.grantDirectPermission(registration);
         when(customerAccountService.register(any(), any())).thenReturn(
                 new com.richcomes.garage.auth.dto.CustomerAccountResponse(51L, 7L, "customer.new", false));
-        var validBody = "{\"customerId\":7,\"username\":\"customer.new\",\"password\":\"" + PASSWORD + "\"}";
+        var validBody = "{\"customerId\":7,\"username\":\"customer.new\"}";
         mvc.perform(post("/api/customer-accounts").header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON).content(validBody))
                 .andExpect(status().isCreated())
@@ -502,6 +505,43 @@ class SecurityFlowTest {
                 .contentType(MediaType.APPLICATION_JSON).content(validBody))
                 .andExpect(status().isForbidden());
         verifyNoMoreInteractions(customerAccountService);
+    }
+
+    @Test
+    void onlyOwnerWithCurrentPermissionCanRecordCustomerVerification() throws Exception {
+        account.grantDirectPermission(new Permission("customer:register", "Delegated enrollment"));
+        mvc.perform(post("/api/customer-accounts/51/verify-and-invite")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"caseReference\":\"CASE-00123\"}"))
+                .andExpect(status().isForbidden());
+        verify(customerAccountService, never()).verifyAndInvite(any(), any(), any());
+
+        var ownerRole = new Role("OWNER", "Business owner");
+        ownerRole.grantPermission(new Permission("customer:register", "Enroll customer"));
+        account.assignRole(ownerRole);
+        mvc.perform(post("/api/customer-accounts/51/verify-and-invite")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"caseReference\":\"CASE-00123\"}"))
+                .andExpect(status().isAccepted())
+                .andExpect(header().string("Cache-Control", "no-store"));
+        verify(customerAccountService).verifyAndInvite(eq(51L), eq("CASE-00123"),
+                argThat(actor -> actor.accountId().equals(42L) && actor.roles().contains("OWNER")));
+    }
+
+    @Test
+    void initialPasswordSetupNeedsValidRequestButNotExistingJwt() throws Exception {
+        mvc.perform(post("/api/auth/recovery/initial-password")
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(post("/api/auth/recovery/initial-password")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"token\":\"" + "A".repeat(43)
+                        + "\",\"password\":\"" + PASSWORD + "\"}"))
+                .andExpect(status().isAccepted())
+                .andExpect(header().string("Cache-Control", "no-store"));
+        verify(recovery).setupInitialPassword("A".repeat(43), PASSWORD);
     }
 
     @Test
