@@ -2,6 +2,7 @@ package com.richcomes.garage.auth.controller;
 
 import com.richcomes.garage.auth.dto.CustomerAccountCreateRequest;
 import com.richcomes.garage.auth.dto.CustomerAccountResponse;
+import com.richcomes.garage.auth.dto.CustomerProofRequest;
 import com.richcomes.garage.auth.service.CustomerAccountService;
 import com.richcomes.garage.auth.security.AccountPrincipal;
 import jakarta.validation.Valid;
@@ -28,6 +29,14 @@ public class CustomerAccountController {
         var created = accounts.register(request, actor);
         return ResponseEntity.created(URI.create("/api/customer-accounts/" + created.accountId()))
                 .cacheControl(CacheControl.noStore()).body(created);
+    }
+
+    @PostMapping("/{id}/verify-and-invite")
+    public ResponseEntity<Void> verifyAndInvite(@PathVariable Long id,
+            @Valid @RequestBody CustomerProofRequest request,
+            @AuthenticationPrincipal AccountPrincipal actor) {
+        accounts.verifyAndInvite(id, request.caseReference(), actor);
+        return ResponseEntity.accepted().cacheControl(CacheControl.noStore()).build();
     }
 
     @PatchMapping("/{id}/activate")
