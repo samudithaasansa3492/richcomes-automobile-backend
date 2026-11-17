@@ -36,6 +36,30 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/technical/recovery/request")
                             .hasAuthority("technical:recovery")
                         .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/customer/me").hasAuthority("customer:self")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/customers", "/api/customer-accounts")
+                            .hasAuthority("customer:register")
+                        // Customer enrollment is delegatable; activation is NOT.
+                        // Require an OWNER principal in addition to the current
+                        // server-side customer:register authority (never JWT claims).
+                        .requestMatchers(HttpMethod.PATCH, "/api/customer-accounts/{id}/activate")
+                            .access((authentication, context) -> {
+                                var current = authentication.get();
+                                boolean permitted = current != null && current.isAuthenticated()
+                                        && current.getPrincipal()
+                                            instanceof com.richcomes.garage.auth.security.AccountPrincipal principal
+                                        && principal.roles().contains("OWNER")
+                                        && principal.permissions().contains("customer:register");
+                                return new org.springframework.security.authorization.AuthorizationDecision(permitted);
+                            })
+                        .requestMatchers(HttpMethod.PUT, "/api/accounts/{id}/permissions/customer-registration")
+                            .hasAuthority("customer:delegate_register")
+                        .requestMatchers(HttpMethod.GET, "/api/v1/customers", "/api/v1/customers/**")
+                            .hasAuthority("customer:read")
+                        .requestMatchers(HttpMethod.PUT, "/api/v1/customers/**")
+                            .hasAuthority("customer:manage")
+                        .requestMatchers(HttpMethod.PATCH, "/api/v1/customers/**")
+                            .hasAuthority("customer:manage")
                         .requestMatchers(HttpMethod.GET, "/api/employees", "/api/employees/{id}")
                             .hasAuthority("employee:read")
                         .requestMatchers(HttpMethod.POST, "/api/employees").hasAuthority("employee:create")

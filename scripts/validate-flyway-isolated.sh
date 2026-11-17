@@ -114,16 +114,46 @@ flyway() {
 verify_count() {
   local db="$1" count
   count="$(docker exec "$CONTAINER" psql -U postgres -d "richcomes_${db}" -Atc \
-    "SELECT COUNT(*) FROM public.flyway_schema_history WHERE success AND version ~ '^[0-9]+$' AND version::int BETWEEN 1 AND 20")"
-  test "$count" = 20 || { echo "FAIL: ${db} migration count=${count}"; exit 1; }
-  echo "PASS: ${db} contains 20 successful Flyway migrations"
+    "SELECT COUNT(*) FROM public.flyway_schema_history WHERE success AND version ~ '^[0-9]+$' AND version::int BETWEEN 1 AND 21")"
+  test "$count" = 21 || { echo "FAIL: ${db} migration count=${count}"; exit 1; }
+  echo "PASS: ${db} contains 21 successful Flyway migrations"
 }
 
-echo '=== Fresh install V1-V20 ==='
+verify_customer_security() {
+  local db="$1" outcome
+  outcome="$(docker exec "$CONTAINER" psql -U postgres -d "richcomes_${db}" -Atc "
+    SELECT CASE WHEN
+      (SELECT COUNT(*) FROM garage.roles WHERE code='CUSTOMER') = 1
+      AND (SELECT COUNT(*) FROM garage.role_permissions rp
+           JOIN garage.roles r ON r.id=rp.role_id
+           JOIN garage.permissions p ON p.id=rp.permission_id
+           WHERE r.code='OWNER' AND p.code IN ('customer:register','customer:delegate_register')) = 2
+      AND (SELECT COUNT(*) FROM garage.role_permissions rp
+           JOIN garage.roles r ON r.id=rp.role_id
+           JOIN garage.permissions p ON p.id=rp.permission_id
+           WHERE r.code='CASHIER' AND p.code='customer:register') = 0
+      AND (SELECT COUNT(*) FROM garage.role_permissions rp
+           JOIN garage.roles r ON r.id=rp.role_id
+           JOIN garage.permissions p ON p.id=rp.permission_id
+           WHERE r.code='CUSTOMER' AND p.code='customer:self') = 1
+      AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='garage'
+                  AND table_name='user_accounts' AND column_name='customer_id')
+      AND EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+                  WHERE n.nspname='garage' AND c.relname='account_permissions' AND c.relrowsecurity)
+      AND EXISTS (SELECT 1 FROM pg_constraint WHERE conname='ck_account_identity_kind'
+                  AND conrelid='garage.user_accounts'::regclass)
+    THEN 'PASS' ELSE 'FAIL' END
+  ")" 
+  test "$outcome" = PASS || { echo "FAIL: ${db} customer role/RLS/constraints"; exit 1; }
+  echo "PASS: ${db} CUSTOMER/OWNER/CASHIER grants, identity constraint and RLS"
+}
+
+echo '=== Fresh install V1-V21 ==='
 flyway fresh latest
 verify_count fresh
+verify_customer_security fresh
 
-echo '=== Simulate upgrade V1-V14 to V20 ==='
+echo '=== Simulate upgrade V1-V14 to V21 ==='
 flyway upgrade 14
 flyway upgrade 18
 
@@ -145,6 +175,7 @@ SQL
 
 flyway upgrade latest
 verify_count upgrade
+verify_customer_security upgrade
 owner_count="$(docker exec "$CONTAINER" psql -U postgres -d richcomes_upgrade -Atc \
   "SELECT count(*) FROM garage.user_accounts a JOIN garage.user_account_roles ar ON ar.user_account_id=a.id JOIN garage.roles r ON r.id=ar.role_id JOIN garage.employees e ON e.id=a.employee_id WHERE a.username='validation.owner' AND a.enabled AND a.identity_kind='BUSINESS' AND r.code='OWNER' AND e.position='OWNER'")"
 test "$owner_count" = 1 || { echo 'FAIL: synthetic legacy OWNER was not preserved'; exit 1; }

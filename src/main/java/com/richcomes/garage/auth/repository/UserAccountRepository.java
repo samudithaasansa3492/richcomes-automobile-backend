@@ -10,10 +10,10 @@ import org.springframework.data.jpa.repository.Query;
 public interface UserAccountRepository extends JpaRepository<UserAccount, Long> {
 
     // Callers must pass UserAccount.normalizeUsername(input).
-    @EntityGraph(attributePaths = {"employee", "roles", "roles.permissions"})
+    @EntityGraph(attributePaths = {"employee", "customer", "roles", "roles.permissions", "directPermissions"})
     Optional<UserAccount> findByUsername(String username);
 
-    @EntityGraph(attributePaths = {"employee", "roles", "roles.permissions"})
+    @EntityGraph(attributePaths = {"employee", "customer", "roles", "roles.permissions", "directPermissions"})
     Optional<UserAccount> findOneById(Long id);
 
     Optional<UserAccount> findByEmployee_Id(UUID employeeId);
@@ -38,4 +38,6 @@ public interface UserAccountRepository extends JpaRepository<UserAccount, Long> 
     boolean existsByUsername(String username);
 
     boolean existsByEmployee_Id(UUID employeeId);
+
+    boolean existsByCustomer_Id(Long customerId);
 }

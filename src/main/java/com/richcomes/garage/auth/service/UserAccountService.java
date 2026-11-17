@@ -190,6 +190,12 @@ public class UserAccountService {
         if (account.isTechnical() || account.getRoles().stream().anyMatch(role -> "ADMIN".equals(role.getCode()))) {
             throw failure(TECHNICAL_ACCOUNT_PROTECTED, "Technical accounts cannot be managed through business account APIs");
         }
+        if (!"BUSINESS".equals(account.getIdentityKind())
+                || account.getEmployee() == null || account.getCustomer() != null) {
+            // CUSTOMER identities must never be read, re-enabled, disabled, or
+            // assigned staff roles via the legacy Employee Account API.
+            throw failure(ACCOUNT_NOT_FOUND, "Account not found");
+        }
     }
 
     private <T> void validate(T request) {

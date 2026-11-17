@@ -203,7 +203,7 @@ class RecoveryPersistenceTest {
         }
         @Bean LocalContainerEntityManagerFactoryBean entityManagerFactory(DataSource source) {
             var factory = new LocalContainerEntityManagerFactoryBean(); factory.setDataSource(source);
-            factory.setPackagesToScan("com.richcomes.garage.auth.entity", "com.richcomes.garage.employee.entity",
+            factory.setPackagesToScan("com.richcomes.garage.auth.entity", "com.richcomes.garage.employee.entity", "com.richcomes.garage.customer.entity",
                     "com.richcomes.garage.auth.recovery");
             factory.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
             factory.setJpaPropertyMap(Map.of("hibernate.hbm2ddl.auto", "create-drop", "hibernate.show_sql", "false"));

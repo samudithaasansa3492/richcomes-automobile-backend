@@ -58,6 +58,9 @@ class SecurityFlowTest {
     @Autowired private JwtSettings settings;
     @Autowired private com.richcomes.garage.auth.service.UserAccountService accountService;
     @Autowired private com.richcomes.garage.auth.recovery.RecoveryService recovery;
+    @Autowired private com.richcomes.garage.auth.service.CustomerAccountService customerAccountService;
+    @Autowired private com.richcomes.garage.auth.service.CustomerRegistrationDelegationService customerDelegations;
+    @Autowired private com.richcomes.garage.customer.repository.CustomerRepository customerRepository;
     private MockMvc mvc;
     private UserAccount account;
     private Employee employee;
@@ -68,7 +71,7 @@ class SecurityFlowTest {
 
     @BeforeEach
     void setUp() {
-        reset(accounts, accountService, recovery);
+        reset(accounts, accountService, recovery, customerAccountService, customerDelegations, customerRepository);
         mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         employee = new Employee();
         ReflectionTestUtils.setField(employee, "id", UUID.fromString("00000000-0000-0000-0000-000000000001"));
@@ -364,12 +367,164 @@ class SecurityFlowTest {
         verifyNoInteractions(accountService);
     }
 
+    @Test
+    void unconfiguredBusinessCategoryRouteIsDeniedEvenToAuthenticatedStaff() throws Exception {
+        // Category module routes require a separately approved permission mapping.
+        // Do not make them public or bypass JWT authentication to fix an obsolete 200 test.
+        mvc.perform(get("/api/service-categories")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void customerAndDelegationRoutesDenyAnonymousOrUndelegatedCashier() throws Exception {
+        mvc.perform(post("/api/customer-accounts")
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(get("/api/customer/me"))
+                .andExpect(status().isUnauthorized());
+        mvc.perform(post("/api/customer-accounts")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(patch("/api/customer-accounts/5/activate")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/accounts/8/permissions/customer-registration")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":true}"))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/customer/me")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void customerCanLogInAndReadOnlyOwnProfileWithExistingJwt() throws Exception {
+        var customer = new com.richcomes.garage.customer.entity.Customer();
+        ReflectionTestUtils.setField(customer, "id", 9L);
+        customer.setStatus(com.richcomes.garage.customer.enums.CustomerStatus.ACTIVE);
+        customer.setName("Test Customer");
+        customer.setMobile("0770000000");
+        customer.setCity("Test City");
+        customer.setEmail("customer@example.invalid");
+        var customerIdentity = UserAccount.customer(customer, "customer.one", passwords.encode(PASSWORD),
+                new Role("CUSTOMER", "Customer identity"));
+        customerIdentity.enable();
+        ReflectionTestUtils.setField(customerIdentity, "id", 42L);
+        when(accounts.findOneById(42L)).thenReturn(Optional.of(customerIdentity));
+        when(accounts.findByUsername("customer.one")).thenReturn(Optional.of(customerIdentity));
+        when(customerRepository.findById(9L)).thenReturn(Optional.of(customer));
+
+        mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"customer.one\",\"password\":\"" + PASSWORD + "\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.accessToken").isString());
+        mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.customerId").value(9))
+                .andExpect(jsonPath("$.employeeId").isEmpty())
+                .andExpect(jsonPath("$.roles[0]").value("CUSTOMER"));
+        mvc.perform(get("/api/customer/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.customerId").value(9))
+                .andExpect(jsonPath("$.name").value("Test Customer"))
+                .andExpect(jsonPath("$.nic").doesNotExist())
+                .andExpect(jsonPath("$.creditLimit").doesNotExist());
+        for (var forbidden : java.util.List.of("/api/v1/customers/10", "/api/accounts", "/api/employees")) {
+            mvc.perform(get(forbidden).header("Authorization", "Bearer " + token))
+                    .andExpect(status().isForbidden());
+        }
+        verify(customerRepository).findById(9L);
+
+        customer.setStatus(com.richcomes.garage.customer.enums.CustomerStatus.SUSPENDED);
+        mvc.perform(get("/api/customer/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void delegatedCashierMayEnrollUntilOwnerRevokesPermissionDespiteOldJwt() throws Exception {
+        var registration = new Permission("customer:register", "Register customer");
+        mvc.perform(post("/api/customer-accounts").header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isForbidden());
+        account.grantDirectPermission(registration);
+        when(customerAccountService.register(any(), any())).thenReturn(
+                new com.richcomes.garage.auth.dto.CustomerAccountResponse(51L, 7L, "customer.new", false));
+        var validBody = "{\"customerId\":7,\"username\":\"customer.new\",\"password\":\"" + PASSWORD + "\"}";
+        mvc.perform(post("/api/customer-accounts").header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(validBody))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.enabled").value(false))
+                .andExpect(header().string("Location", "/api/customer-accounts/51"));
+        verify(customerAccountService).register(any(), any());
+        account.revokeDirectPermission(registration);
+        mvc.perform(post("/api/customer-accounts").header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(validBody))
+                .andExpect(status().isForbidden());
+        verifyNoMoreInteractions(customerAccountService);
+    }
+
+    @Test
+    void delegatedCashierCannotActivateCustomerEvenWhenAllowedToEnroll() throws Exception {
+        account.grantDirectPermission(new Permission("customer:register", "Delegated enrollment"));
+        mvc.perform(patch("/api/customer-accounts/51/activate")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+        verify(customerAccountService, never()).activate(any(), any());
+    }
+
+    @Test
+    void customerActivationRequiresCurrentOwnerRoleAndRegistrationPermission() throws Exception {
+        var ownerRole = new Role("OWNER", "Business owner");
+        account.assignRole(ownerRole);
+        mvc.perform(patch("/api/customer-accounts/51/activate")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+        verify(customerAccountService, never()).activate(any(), any());
+
+        ownerRole.grantPermission(new Permission("customer:register", "Enroll customer"));
+        when(customerAccountService.activate(eq(51L), any()))
+                .thenReturn(new com.richcomes.garage.auth.dto.CustomerAccountResponse(
+                        51L, 7L, "customer.new", true));
+        mvc.perform(patch("/api/customer-accounts/51/activate")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enabled").value(true))
+                .andExpect(header().string("Cache-Control", "no-store"));
+        verify(customerAccountService).activate(eq(51L),
+                argThat(principal -> principal.accountId().equals(42L)
+                        && principal.roles().contains("OWNER")
+                        && principal.permissions().contains("customer:register")));
+    }
+
+    @Test
+    void ownerDelegationEndpointRequiresOwnerAuthorityAndUsesAuthenticatedActor() throws Exception {
+        role.grantPermission(new Permission("customer:delegate_register", "Delegate cashier"));
+        mvc.perform(put("/api/accounts/7/permissions/customer-registration")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":true}"))
+                .andExpect(status().isForbidden());
+        account.assignRole(new Role("OWNER", "Garage owner"));
+        when(customerDelegations.setAllowed(eq(7L), eq(true), any()))
+                .thenReturn(new com.richcomes.garage.auth.dto.CustomerRegistrationDelegationResponse(7L, true));
+        mvc.perform(put("/api/accounts/7/permissions/customer-registration")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content("{\"enabled\":true,\"actorId\":999}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.registrationPermitted").value(true));
+        verify(customerDelegations).setAllowed(eq(7L), eq(true),
+                argThat(actor -> actor.accountId().equals(42L) && actor.roles().contains("OWNER")));
+    }
+
     @Configuration(proxyBeanMethods = false)
     @EnableWebMvc
     @Import({SecurityConfig.class, SecurityErrorHandlers.class, AccountJwtAuthenticationConverter.class,
             AuthController.class, AuthExceptionHandler.class, AuthenticationService.class, AccessTokenService.class,
             EmployeeProbe.class, com.richcomes.garage.auth.controller.AccountController.class,
-            com.richcomes.garage.auth.controller.AccountExceptionHandler.class})
+            com.richcomes.garage.auth.controller.AccountExceptionHandler.class,
+            com.richcomes.garage.auth.controller.CustomerAccountController.class,
+            com.richcomes.garage.auth.controller.CustomerRegistrationDelegationController.class,
+            com.richcomes.garage.auth.controller.CustomerMeController.class})
     static class TestConfig {
         @Bean com.richcomes.garage.auth.recovery.RecoveryService recoveryService() {
             return mock(com.richcomes.garage.auth.recovery.RecoveryService.class);
@@ -385,6 +540,15 @@ class SecurityFlowTest {
             return mock(com.richcomes.garage.auth.service.UserAccountService.class);
         }
         @Bean UserAccountRepository accounts() { return mock(UserAccountRepository.class); }
+        @Bean com.richcomes.garage.customer.repository.CustomerRepository customerRepository() {
+            return mock(com.richcomes.garage.customer.repository.CustomerRepository.class);
+        }
+        @Bean com.richcomes.garage.auth.service.CustomerAccountService customerAccountService() {
+            return mock(com.richcomes.garage.auth.service.CustomerAccountService.class);
+        }
+        @Bean com.richcomes.garage.auth.service.CustomerRegistrationDelegationService customerDelegations() {
+            return mock(com.richcomes.garage.auth.service.CustomerRegistrationDelegationService.class);
+        }
         @Bean PasswordEncoder passwordEncoder() {
             // Reduced test-only cost; production PasswordConfig remains cost 12.
             return new DelegatingPasswordEncoder("bcrypt", Map.of("bcrypt", new BCryptPasswordEncoder(4)));

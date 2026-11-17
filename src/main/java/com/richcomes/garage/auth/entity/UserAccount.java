@@ -2,6 +2,7 @@ package com.richcomes.garage.auth.entity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.richcomes.garage.employee.entity.Employee;
+import com.richcomes.garage.customer.entity.Customer;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -37,6 +38,10 @@ public class UserAccount {
     @JoinColumn(name = "employee_id", unique = true, updatable = false)
     private Employee employee;
 
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "customer_id", unique = true, updatable = false)
+    private Customer customer;
+
     @Column(nullable = false, unique = true, length = 80, updatable = false)
     private String username;
 
@@ -60,6 +65,13 @@ public class UserAccount {
             uniqueConstraints = @UniqueConstraint(columnNames = {"user_account_id", "role_id"}))
     private Set<Role> roles = new LinkedHashSet<>();
 
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "account_permissions", schema = "garage",
+            joinColumns = @JoinColumn(name = "account_id", nullable = false),
+            inverseJoinColumns = @JoinColumn(name = "permission_id", nullable = false),
+            uniqueConstraints = @UniqueConstraint(columnNames = {"account_id", "permission_id"}))
+    private Set<Permission> directPermissions = new LinkedHashSet<>();
+
     @org.hibernate.annotations.ColumnDefault("'BUSINESS'")
     @Column(name = "identity_kind", nullable = false, updatable = false, length = 16)
     private String identityKind = "BUSINESS";
@@ -77,6 +89,8 @@ public class UserAccount {
     private Instant recoveryLastSentAt;
 
     public boolean isTechnical() { return "TECHNICAL".equals(identityKind); }
+    public boolean isCustomer() { return "CUSTOMER".equals(identityKind); }
+    public String getIdentityKind() { return identityKind; }
     public long getCredentialVersion() { return credentialVersion; }
     @JsonIgnore public String getRecoveryEmail() { return recoveryEmail; }
     @JsonIgnore public Instant getRecoveryLastSentAt() { return recoveryLastSentAt; }
@@ -93,6 +107,21 @@ public class UserAccount {
         account.username = normalizeUsername(username);
         account.changePasswordHash(hash);
         account.assignRole(admin);
+        return account;
+    }
+
+    /** Staff-verified enrollment only; never expose this factory on a public endpoint. */
+    public static UserAccount customer(Customer customer, String username, String hash, Role role) {
+        Objects.requireNonNull(customer, "customer");
+        if (!"CUSTOMER".equals(Objects.requireNonNull(role, "role").getCode())) {
+            throw new IllegalArgumentException("CUSTOMER role required");
+        }
+        var account = new UserAccount();
+        account.identityKind = "CUSTOMER";
+        account.customer = customer;
+        account.username = normalizeUsername(username);
+        account.changePasswordHash(hash);
+        account.assignRole(role);
         return account;
     }
 
@@ -125,6 +154,7 @@ public class UserAccount {
 
     public Long getId() { return id; }
     public Employee getEmployee() { return employee; }
+    public Customer getCustomer() { return customer; }
     public String getUsername() { return username; }
     @JsonIgnore
     public String getPasswordHash() { return passwordHash; }
@@ -132,6 +162,19 @@ public class UserAccount {
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
     public Set<Role> getRoles() { return Collections.unmodifiableSet(roles); }
+    public Set<Permission> getDirectPermissions() { return Collections.unmodifiableSet(directPermissions); }
+
+    /** Explicit per-CASHIER delegation; never change role-wide permissions. */
+    public void grantDirectPermission(Permission permission) {
+        Objects.requireNonNull(permission, "permission");
+        directPermissions.removeIf(existing -> existing.getCode().equals(permission.getCode()));
+        directPermissions.add(permission);
+    }
+
+    public void revokeDirectPermission(Permission permission) {
+        Objects.requireNonNull(permission, "permission");
+        directPermissions.removeIf(existing -> existing.getCode().equals(permission.getCode()));
+    }
 
     public void enable() { enabled = true; }
     public void disable() { enabled = false; }

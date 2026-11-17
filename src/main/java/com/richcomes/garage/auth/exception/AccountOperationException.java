@@ -6,6 +6,13 @@ public class AccountOperationException extends RuntimeException {
     public enum Code {
         INVALID_REQUEST,
         EMPLOYEE_NOT_FOUND,
+        CUSTOMER_NOT_FOUND,
+        CUSTOMER_ACCOUNT_NOT_FOUND,
+        CUSTOMER_ALREADY_HAS_ACCOUNT,
+        CUSTOMER_INACTIVE,
+        CUSTOMER_ROLE_NOT_CONFIGURED,
+        CASHIER_NOT_ELIGIBLE,
+        CUSTOMER_REGISTRATION_NOT_ALLOWED,
         ACCOUNT_NOT_FOUND,
         USERNAME_ALREADY_EXISTS,
         EMPLOYEE_ALREADY_HAS_ACCOUNT,
