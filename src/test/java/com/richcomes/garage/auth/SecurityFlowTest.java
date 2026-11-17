@@ -585,7 +585,9 @@ class SecurityFlowTest {
         for (String code : java.util.Set.of(
                 "customer:read", "customer:manage", "billing:read", "report:read",
                 "report:export", "service:delete", "history:delete",
-                "reminder:delete", "notification:delete")) {
+                "reminder:delete", "notification:delete",
+                "reminder:read", "reminder:create", "reminder:manage",
+                "notification:read", "notification:send")) {
             var unsafe = new Permission(code, "Legacy direct and shared grant");
             account.grantDirectPermission(unsafe);
             role.grantPermission(unsafe);
@@ -598,7 +600,12 @@ class SecurityFlowTest {
                 delete("/api/service-jobs/7"),
                 delete("/api/v1/history/7"),
                 delete("/api/v1/reminders/7"),
-                delete("/api/v1/notifications/7"))) {
+                delete("/api/v1/notifications/7"),
+                get("/api/v1/reminders"),
+                post("/api/v1/reminders"),
+                patch("/api/v1/reminders/7/send"),
+                get("/api/v1/notifications"),
+                post("/api/v1/notifications/send"))) {
             mvc.perform(forbidden.header("Authorization", "Bearer " + token))
                     .andExpect(status().isForbidden());
         }
