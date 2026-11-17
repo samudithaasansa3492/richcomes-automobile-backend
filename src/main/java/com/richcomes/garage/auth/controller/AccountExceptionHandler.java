@@ -15,14 +15,16 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 @RestControllerAdvice(assignableTypes = {AccountController.class, EmployeeController.class,
-        CustomerAccountController.class, CustomerRegistrationDelegationController.class})
+        CustomerAccountController.class, CustomerRegistrationDelegationController.class,
+        CashierPermissionController.class})
 public class AccountExceptionHandler {
     @ExceptionHandler(AccountOperationException.class)
     public ResponseEntity<Map<String, String>> accountFailure(AccountOperationException exception) {
         int status = switch (exception.getCode()) {
             case INVALID_REQUEST, UNKNOWN_ROLE -> 400;
             case EMPLOYEE_NOT_FOUND, ACCOUNT_NOT_FOUND, CUSTOMER_NOT_FOUND, CUSTOMER_ACCOUNT_NOT_FOUND -> 404;
-            case SELF_MODIFICATION, TECHNICAL_ACCOUNT_PROTECTED, CUSTOMER_REGISTRATION_NOT_ALLOWED -> 403;
+            case SELF_MODIFICATION, TECHNICAL_ACCOUNT_PROTECTED, CUSTOMER_REGISTRATION_NOT_ALLOWED,
+                 PERMISSION_DELEGATION_FORBIDDEN -> 403;
             case OWNER_ROLE_NOT_CONFIGURED, CUSTOMER_ROLE_NOT_CONFIGURED -> 503;
             default -> 409;
         };

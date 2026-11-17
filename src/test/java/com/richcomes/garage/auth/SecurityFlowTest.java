@@ -60,6 +60,7 @@ class SecurityFlowTest {
     @Autowired private com.richcomes.garage.auth.recovery.RecoveryService recovery;
     @Autowired private com.richcomes.garage.auth.service.CustomerAccountService customerAccountService;
     @Autowired private com.richcomes.garage.auth.service.CustomerRegistrationDelegationService customerDelegations;
+    @Autowired private com.richcomes.garage.auth.service.CashierPermissionService cashierPermissions;
     @Autowired private com.richcomes.garage.customer.repository.CustomerRepository customerRepository;
     private MockMvc mvc;
     private UserAccount account;
@@ -71,7 +72,7 @@ class SecurityFlowTest {
 
     @BeforeEach
     void setUp() {
-        reset(accounts, accountService, recovery, customerAccountService, customerDelegations, customerRepository);
+        reset(accounts, accountService, recovery, customerAccountService, customerDelegations, customerRepository, cashierPermissions);
         mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         employee = new Employee();
         ReflectionTestUtils.setField(employee, "id", UUID.fromString("00000000-0000-0000-0000-000000000001"));
@@ -216,7 +217,36 @@ class SecurityFlowTest {
     }
 
     @Test
+    void accidentalCashierEmployeeAndAccountGrantsRemainDeniedEvenWithOldJwt() throws Exception {
+        // Old migrations do not grant these to CASHIER, but a later accidental
+        // role-wide grant must NEVER create a staff-administrator bypass.
+        role.grantPermission(new Permission("employee:create", "Unsafe staff grant"));
+        role.grantPermission(new Permission("employee:update", "Unsafe staff grant"));
+        role.grantPermission(new Permission("employee:deactivate", "Unsafe staff grant"));
+        role.grantPermission(new Permission("account:read", "Unsafe account grant"));
+        role.grantPermission(new Permission("account:create", "Unsafe account grant"));
+        role.grantPermission(new Permission("account:manage", "Unsafe account grant"));
+        // A malformed direct grant must not bypass the OWNER-only boundary either.
+        account.grantDirectPermission(new Permission("account:manage", "Unapproved direct grant"));
+        for (var request : java.util.List.of(
+                get("/api/employees"), post("/api/employees"),
+                put("/api/employees/5"), patch("/api/employees/5/deactivate"),
+                get("/api/accounts"), post("/api/accounts"),
+                put("/api/accounts/5/roles"), patch("/api/accounts/5/disable"),
+                patch("/api/accounts/5/enable"))) {
+            mvc.perform(request.header("Authorization", "Bearer " + token))
+                    .andExpect(status().isForbidden());
+        }
+        mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.permissions").isEmpty());
+        verifyNoInteractions(accountService);
+    }
+
+    @Test
     void employeeReadRequiresReadPermission() throws Exception {
+        // The OWNER owns administrative privileges; CASHIER never inherits them.
+        account.assignRole(new Role("OWNER", "Owner"));
         mvc.perform(get("/api/employees").header("Authorization", "Bearer " + token)).andExpect(status().isOk());
         role.revokePermission(new Permission("employee:read", "Read"));
         mvc.perform(get("/api/employees").header("Authorization", "Bearer " + token))
@@ -225,6 +255,8 @@ class SecurityFlowTest {
 
     @Test
     void eachEmployeeMutationRequiresItsSpecificPermission() throws Exception {
+        // The OWNER owns administrative privileges; CASHIER never inherits them.
+        account.assignRole(new Role("OWNER", "Owner"));
         mvc.perform(post("/api/employees").header("Authorization", "Bearer " + token)).andExpect(status().isForbidden());
         role.grantPermission(new Permission("employee:create", "Create"));
         mvc.perform(post("/api/employees").header("Authorization", "Bearer " + token)).andExpect(status().isOk());
@@ -312,6 +344,8 @@ class SecurityFlowTest {
 
     @Test
     void accountReadPermissionDoesNotGrantManagement() throws Exception {
+        // The OWNER owns administrative privileges; CASHIER never inherits them.
+        account.assignRole(new Role("OWNER", "Owner"));
         role.grantPermission(new Permission("account:read", "Read accounts"));
         when(accountService.listAccounts(0, 20)).thenReturn(new com.richcomes.garage.auth.dto.AccountPageResponse(
                 java.util.List.of(), 0, 20, 0, 0));
@@ -324,6 +358,8 @@ class SecurityFlowTest {
 
     @Test
     void managementUsesAuthenticatedActorAndSafeDomainErrors() throws Exception {
+        // The OWNER owns administrative privileges; CASHIER never inherits them.
+        account.assignRole(new Role("OWNER", "Owner"));
         role.grantPermission(new Permission("account:manage", "Manage accounts"));
         when(accountService.disableAccount(7L, 42L)).thenThrow(new com.richcomes.garage.auth.exception.AccountOperationException(
                 com.richcomes.garage.auth.exception.AccountOperationException.Code.LAST_ACTIVE_OWNER,
@@ -345,6 +381,8 @@ class SecurityFlowTest {
 
     @Test
     void accountCreationReturnsLocationWithoutPassword() throws Exception {
+        // The OWNER owns administrative privileges; CASHIER never inherits them.
+        account.assignRole(new Role("OWNER", "Owner"));
         role.grantPermission(new Permission("account:create", "Create account"));
         when(accountService.createAccount(any())).thenReturn(new com.richcomes.garage.auth.dto.AccountResponse(
                 7L, employee.getId(), "new.account", false, java.util.Set.of("CASHIER"), null, null));
@@ -360,6 +398,8 @@ class SecurityFlowTest {
 
     @Test
     void malformedAccountRequestsDoNotExposeInput() throws Exception {
+        // The OWNER owns administrative privileges; CASHIER never inherits them.
+        account.assignRole(new Role("OWNER", "Owner"));
         role.grantPermission(new Permission("account:create", "Create account"));
         mvc.perform(post("/api/accounts").header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"password\":\"secret\"}"))
@@ -516,6 +556,103 @@ class SecurityFlowTest {
                 argThat(actor -> actor.accountId().equals(42L) && actor.roles().contains("OWNER")));
     }
 
+    @Test
+    void cashierGetsOnlyIndividuallyDelegatedVehiclePermissionsAndRevocationIsImmediate() throws Exception {
+        var read = new Permission("vehicle:read", "Read vehicles");
+        var update = new Permission("vehicle:update", "Update vehicles");
+        // An accidental CASHIER-wide role grant cannot grant all cashiers access.
+        role.grantPermission(read);
+        mvc.perform(get("/api/v1/vehicles").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+
+        account.grantDirectPermission(read);
+        mvc.perform(get("/api/v1/vehicles").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.ok").value(true));
+        mvc.perform(put("/api/v1/vehicles/7").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+        account.grantDirectPermission(update);
+        mvc.perform(put("/api/v1/vehicles/7").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        account.revokeDirectPermission(read);
+        mvc.perform(get("/api/v1/vehicles").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+        mvc.perform(put("/api/v1/vehicles/7").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void unapprovedFinancialCustomerAndDeleteAuthoritiesNeverReachCashierJwt() throws Exception {
+        for (String code : java.util.Set.of(
+                "customer:read", "customer:manage", "billing:read", "report:read",
+                "report:export", "service:delete", "history:delete",
+                "reminder:delete", "notification:delete",
+                "reminder:read", "reminder:create", "reminder:manage",
+                "notification:read", "notification:send")) {
+            var unsafe = new Permission(code, "Legacy direct and shared grant");
+            account.grantDirectPermission(unsafe);
+            role.grantPermission(unsafe);
+        }
+        for (var forbidden : java.util.List.of(
+                get("/api/v1/customers"),
+                get("/api/v1/billing/invoices/7"),
+                get("/api/v1/reports/financial"),
+                get("/api/v1/reports/financial/pdf"),
+                delete("/api/service-jobs/7"),
+                delete("/api/v1/history/7"),
+                delete("/api/v1/reminders/7"),
+                delete("/api/v1/notifications/7"),
+                get("/api/v1/reminders"),
+                post("/api/v1/reminders"),
+                patch("/api/v1/reminders/7/send"),
+                get("/api/v1/notifications"),
+                post("/api/v1/notifications/send"))) {
+            mvc.perform(forbidden.header("Authorization", "Bearer " + token))
+                    .andExpect(status().isForbidden());
+        }
+        mvc.perform(get("/api/auth/me").header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.permissions").isEmpty());
+    }
+
+    @Test
+    void auditAndPermissionDelegationCannotBeObtainedThroughCashierRole() throws Exception {
+        role.grantPermission(new Permission("permission:delegate", "Unsafe global grant"));
+        role.grantPermission(new Permission("audit:read", "Unsafe global grant"));
+        mvc.perform(get("/api/v1/audit-logs").header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/accounts/7/permissions")
+                .header("Authorization", "Bearer " + token))
+                .andExpect(status().isForbidden());
+        verifyNoInteractions(cashierPermissions);
+    }
+
+    @Test
+    void onlyOwnerCanCallAuditedPerCashierGrantAndReadEndpoints() throws Exception {
+        var ownerRole = new Role("OWNER", "Garage owner");
+        ownerRole.grantPermission(new Permission("permission:delegate", "Delegate business actions"));
+        ownerRole.grantPermission(new Permission("vehicle:read", "Read vehicles"));
+        account.assignRole(ownerRole);
+        when(cashierPermissions.change(eq(7L), any(), any()))
+                .thenReturn(new com.richcomes.garage.auth.dto.CashierPermissionsResponse(
+                        7L, java.util.Set.of("vehicle:read")));
+        var body = "{\"permissionCode\":\"vehicle:read\",\"enabled\":true,\"actorId\":999}";
+        mvc.perform(put("/api/accounts/7/permissions")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.grantedPermissions[0]").value("vehicle:read"));
+        verify(cashierPermissions).change(eq(7L),
+                argThat(request -> request.permissionCode().equals("vehicle:read") && request.enabled()),
+                argThat(actor -> actor.accountId().equals(42L) && actor.roles().contains("OWNER")));
+    }
+
+    @RestController
+    static class BusinessProbe {
+        @GetMapping("/api/v1/vehicles") Map<String, Boolean> vehicles() { return Map.of("ok", true); }
+        @PutMapping("/api/v1/vehicles/{id}") Map<String, Boolean> updateVehicle() { return Map.of("ok", true); }
+        @GetMapping("/api/v1/audit-logs") Map<String, Boolean> audit() { return Map.of("ok", true); }
+    }
+
     @Configuration(proxyBeanMethods = false)
     @EnableWebMvc
     @Import({SecurityConfig.class, SecurityErrorHandlers.class, AccountJwtAuthenticationConverter.class,
@@ -524,7 +661,9 @@ class SecurityFlowTest {
             com.richcomes.garage.auth.controller.AccountExceptionHandler.class,
             com.richcomes.garage.auth.controller.CustomerAccountController.class,
             com.richcomes.garage.auth.controller.CustomerRegistrationDelegationController.class,
-            com.richcomes.garage.auth.controller.CustomerMeController.class})
+            com.richcomes.garage.auth.controller.CustomerMeController.class,
+            com.richcomes.garage.auth.controller.CashierPermissionController.class,
+            BusinessProbe.class})
     static class TestConfig {
         @Bean com.richcomes.garage.auth.recovery.RecoveryService recoveryService() {
             return mock(com.richcomes.garage.auth.recovery.RecoveryService.class);
@@ -548,6 +687,9 @@ class SecurityFlowTest {
         }
         @Bean com.richcomes.garage.auth.service.CustomerRegistrationDelegationService customerDelegations() {
             return mock(com.richcomes.garage.auth.service.CustomerRegistrationDelegationService.class);
+        }
+        @Bean com.richcomes.garage.auth.service.CashierPermissionService cashierPermissions() {
+            return mock(com.richcomes.garage.auth.service.CashierPermissionService.class);
         }
         @Bean PasswordEncoder passwordEncoder() {
             // Reduced test-only cost; production PasswordConfig remains cost 12.
