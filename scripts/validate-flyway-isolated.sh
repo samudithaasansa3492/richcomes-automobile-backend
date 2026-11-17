@@ -114,9 +114,9 @@ flyway() {
 verify_count() {
   local db="$1" count
   count="$(docker exec "$CONTAINER" psql -U postgres -d "richcomes_${db}" -Atc \
-    "SELECT COUNT(*) FROM public.flyway_schema_history WHERE success AND version ~ '^[0-9]+$' AND version::int BETWEEN 1 AND 22")"
-  test "$count" = 22 || { echo "FAIL: ${db} migration count=${count}"; exit 1; }
-  echo "PASS: ${db} contains 22 successful Flyway migrations"
+    "SELECT COUNT(*) FROM public.flyway_schema_history WHERE success AND version ~ '^[0-9]+$' AND version::int BETWEEN 1 AND 23")"
+  test "$count" = 23 || { echo "FAIL: ${db} migration count=${count}"; exit 1; }
+  echo "PASS: ${db} contains 23 successful Flyway migrations"
 }
 
 verify_customer_security() {
@@ -138,6 +138,11 @@ verify_customer_security() {
            WHERE r.code='CUSTOMER' AND p.code='customer:self') = 1
       AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='garage'
                   AND table_name='user_accounts' AND column_name='customer_id')
+      AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='garage'
+                  AND table_name='user_accounts' AND column_name='customer_password_set_at')
+      AND EXISTS (SELECT 1 FROM information_schema.check_constraints
+                  WHERE constraint_name='recovery_challenges_purpose_check'
+                    AND check_clause LIKE '%INITIAL_PASSWORD%')
       AND EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
                   WHERE n.nspname='garage' AND c.relname='account_permissions' AND c.relrowsecurity)
       AND EXISTS (SELECT 1 FROM pg_constraint WHERE conname='ck_account_identity_kind'
