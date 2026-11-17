@@ -37,6 +37,12 @@ public class AccountExceptionHandler {
         return response(400, "INVALID_REQUEST", "Invalid request");
     }
 
+    @ExceptionHandler(com.richcomes.garage.auth.recovery.RecoveryFailure.class)
+    public ResponseEntity<Map<String, String>> onboardingUnavailable(Exception exception) {
+        return response(503, "CUSTOMER_ONBOARDING_UNAVAILABLE",
+                "Customer invitation service unavailable");
+    }
+
     @ExceptionHandler(DataAccessException.class)
     public ResponseEntity<Map<String, String>> databaseFailure(Exception exception) {
         return response(503, "ACCOUNT_OPERATION_UNAVAILABLE", "Operation unavailable; retry later");
