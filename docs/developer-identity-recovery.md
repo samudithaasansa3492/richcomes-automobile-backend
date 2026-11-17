@@ -2,7 +2,7 @@
 
 ## Scope and boundaries
 
-V15 adds independent `TECHNICAL` accounts with no garage Employee. Existing accounts
+V20 adds independent `TECHNICAL` accounts with no garage Employee. Existing accounts
 remain `BUSINESS`; nothing silently converts a client account into a developer.
 Only an enabled technical identity with exactly the ADMIN role authenticates as a
 technical user. It receives the explicit `technical:recovery` permission, regardless
@@ -18,7 +18,7 @@ impersonation, password-setting or role-escalation capability is exposed to ADMI
 
 ## Operator provisioning
 
-Apply approved V1–V15 migrations first. Use the existing standalone provisioning
+Apply approved V1–V20 migrations first. Use the existing standalone provisioning
 classpath arrangement in `first-admin-provisioning.md`, replacing its entry point
 with `com.richcomes.provisioning.DeveloperAdminCommand`:
 
@@ -70,7 +70,7 @@ enable accounts, reactivate Employees or change roles. Reset increments credenti
 version, so prior JWTs are rejected on their next request. Legacy JWTs without `cv`
 work only at version zero until expiry or the first revocation. A JPA row version
 prevents concurrent ordinary updates overwriting recovered credentials. All app
-nodes must use V15-capable code before creating independent technical accounts.
+nodes must use V20-capable code before creating independent technical accounts.
 
 Audit rows contain only fixed event codes, actor/target IDs and timestamps, never
 addresses, credentials or tokens. Audit writes are in the same transaction as the

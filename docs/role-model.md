@@ -13,7 +13,7 @@ by this clarification. Technicians are employees assigned to jobs, not system us
 
 ## Implemented boundary in this change
 
-V14 preserves earlier migration checksums, renames OWNER_ADMIN to OWNER (including
+V19 preserves earlier migration checksums, renames OWNER_ADMIN to OWNER (including
 employee position), creates ADMIN with no grants, disables legacy technician
 accounts and removes the technician system role. It aborts for ambiguous existing
 OWNER/ADMIN roles or legacy owners linked to technician employees. Review such data
@@ -32,12 +32,12 @@ Last-owner protection and the explicit bootstrap command now refer to OWNER, not
 ADMIN. The legacy Java class names FirstAdminCommand/FirstAdminProvisioner remain
 for invocation compatibility; confirmation now requires CREATE FIRST OWNER.
 
-## Developer identity and recovery follow-up (V15)
+## Developer identity and recovery follow-up (V20)
 
 See [developer identity and recovery](developer-identity-recovery.md). Technical
 identities have no Employee record, receive only the explicit technical recovery
 permission, and are excluded from business account pages. The operator-only
-DeveloperAdminCommand provisions them after V15. No automatic account is created.
+DeveloperAdminCommand provisions them after V20. No automatic account is created.
 Verified-email recovery uses single-use hashed challenges and revokes old bearer
 tokens on password reset. Delivery is disabled until SMTP and the client recovery
 page are configured; this is not a claim of production delivery readiness.
@@ -61,7 +61,7 @@ logs, backups, environment variables or secrets in a technical admin API.
 
 ## Rollout and verification
 
-This change does not apply migrations to shared Supabase. Test V1-V14 on disposable
+This change does not apply migrations to shared Supabase. Test V1–V20 on disposable
 PostgreSQL, including upgrade from V13 with synthetic legacy role assignments,
 ambiguous mapping rollback and simultaneous owner-removal operations. Run the
 selected authentication/account/provisioning tests before rollout. Previous V13

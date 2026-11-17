@@ -2,21 +2,21 @@
 
 ## Approval and scope
 
-This code includes V13/V14 SQL and an explicit operator command. It does not apply migrations
+This code includes V18/V19 SQL and an explicit operator command. It does not apply migrations
 to shared Supabase or provision an account there. Shared migration/data changes require
 separate approval. **Normal Spring Boot startup runs pending Flyway migrations**, including
-V14: do not start the application against the shared database before rollout approval.
+V15–V20: do not start the application against the shared database before rollout approval.
 
-V13 is retained unchanged as historical migration SQL. V14 corrects its original
-OWNER_ADMIN/TECHNICIAN role model. After V1-V14 the role definitions are:
+V18 seeds the identity roles; V19 corrects its original
+OWNER_ADMIN/TECHNICIAN role model. After V1–V19 the role definitions are:
 
 | Role | Member 1 permissions seeded |
 | --- | --- |
 | OWNER | employee:read, employee:create, employee:update, employee:deactivate, account:read, account:create, account:manage |
 | CASHIER | None; operational mapping is a separate integration step |
-| ADMIN | No business permission grants; a separate V15 technical identity receives only `technical:recovery` when eligible |
+| ADMIN | No business permission grants; a separate V20 technical identity receives only `technical:recovery` when eligible |
 
-TECHNICIAN is only an Employee position, not a system role. V14 preserves legacy
+TECHNICIAN is only an Employee position, not a system role. V19 preserves legacy
 owner grants and IDs, disables legacy technician accounts, and refuses ambiguous
 existing OWNER/ADMIN definitions. See [role-model.md](role-model.md) for boundaries,
 remaining implementation work, and the migration upgrade validation requirements.
@@ -26,7 +26,7 @@ class name is retained for invocation compatibility.
 ## Preconditions
 
 - Java 21 and dependencies built from the approved branch.
-- Original migrations through V14 applied to the specifically approved target database (V15 additionally required for independent technical identities and recovery).
+- Migrations through V19 applied to the specifically approved target database (V20 additionally required for independent technical identities and recovery).
 - An existing active non-technician Employee with no UserAccount, and an unused username.
 - No enabled OWNER account linked to an active Employee.
 - A trusted operator with database privileges to read/lock the necessary rows and insert
