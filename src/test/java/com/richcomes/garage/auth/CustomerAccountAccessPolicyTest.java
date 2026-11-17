@@ -25,6 +25,15 @@ class CustomerAccountAccessPolicyTest {
         UserAccount account = UserAccount.customer(customer, "customer.one", "fake-encoded-hash", role);
         assertFalse(AccountAccessPolicy.canAuthenticate(account));
         account.enable();
+        // Even a mistakenly enabled account cannot log in before proof + setup.
+        assertFalse(AccountAccessPolicy.canAuthenticate(account));
+        customer.setEmail("customer@example.invalid");
+        account.recordCustomerIdentityProof(51L, "CASE-00123",
+                customer.getEmail(), java.time.Instant.now());
+        assertFalse(AccountAccessPolicy.canAuthenticate(account));
+        account.disable();
+        account.setCustomerInitialPassword("encoded-customer-secret", java.time.Instant.now());
+        account.enable();
         assertTrue(AccountAccessPolicy.canAuthenticate(account));
         assertEquals(Set.of("customer:self"), AccountAccessPolicy.effectivePermissions(account));
         AccountPrincipal principal = AccountPrincipal.from(account);
