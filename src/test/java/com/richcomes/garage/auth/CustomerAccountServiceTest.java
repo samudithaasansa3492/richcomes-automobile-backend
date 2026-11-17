@@ -33,6 +33,7 @@ class CustomerAccountServiceTest {
     @Mock RoleRepository roles;
     @Mock PasswordEncoder passwords;
     @Mock SecurityAuditRepository audit;
+    @Mock com.richcomes.garage.auth.recovery.RecoveryService recovery;
     private final AccountPrincipal staff = new AccountPrincipal(51L, null, "owner.one",
             Set.of("OWNER"), Set.of("customer:register"));
     private CustomerAccountService service;
@@ -40,20 +41,21 @@ class CustomerAccountServiceTest {
     private static final String PASSWORD = "synthetic secret password";
 
     @BeforeEach void init() {
-        service = new CustomerAccountService(accounts, customers, roles, passwords, audit);
+        service = new CustomerAccountService(accounts, customers, roles, passwords, audit, recovery);
         customer = new Customer();
         ReflectionTestUtils.setField(customer, "id", 7L);
         customer.setStatus(CustomerStatus.ACTIVE);
+        customer.setEmail("customer@example.invalid");
     }
 
     private CustomerAccountCreateRequest request() {
-        return new CustomerAccountCreateRequest(7L, "  CUSTOMER.One ", PASSWORD);
+        return new CustomerAccountCreateRequest(7L, "  CUSTOMER.One ");
     }
 
     @Test void createsDisabledAccountForExistingActiveCustomer() {
         when(customers.findById(7L)).thenReturn(Optional.of(customer));
         when(roles.findByCode("CUSTOMER")).thenReturn(Optional.of(new Role("CUSTOMER", "Customer")));
-        when(passwords.encode(PASSWORD)).thenReturn("encoded-password");
+        when(passwords.encode(anyString())).thenReturn("encoded-password");
         when(accounts.saveAndFlush(any(UserAccount.class))).thenAnswer(inv -> inv.getArgument(0));
         var result = service.register(request(), staff);
         assertEquals(7L, result.customerId());
@@ -87,6 +89,9 @@ class CustomerAccountServiceTest {
     @Test void activationIsSeparateAndRequiresCustomerIdentity() {
         var account = UserAccount.customer(customer, "customer.one", "encoded-password",
                 new Role("CUSTOMER", "Customer"));
+        account.recordCustomerIdentityProof(51L, "CASE-00123", customer.getEmail(),
+                java.time.Instant.now());
+        account.setCustomerInitialPassword("encoded-customer-secret", java.time.Instant.now());
         when(accounts.findOneById(4L)).thenReturn(Optional.of(account));
         when(accounts.saveAndFlush(account)).thenReturn(account);
         assertFalse(account.isEnabled());
@@ -114,8 +119,46 @@ class CustomerAccountServiceTest {
         verifyNoInteractions(accounts, customers, roles, passwords, audit);
     }
 
-    @Test void rejectsWeakPasswordBeforeDatabaseAccess() {
-        var bad = new CustomerAccountCreateRequest(7L, "customer.one", "short");
+    @Test void customerActivationDeniedUntilProofAndCustomerChosenPassword() {
+        var account = UserAccount.customer(customer, "customer.one", "random-placeholder-hash",
+                new Role("CUSTOMER", "Customer"));
+        when(accounts.findOneById(4L)).thenReturn(Optional.of(account));
+        assertEquals(AccountOperationException.Code.CUSTOMER_VERIFICATION_REQUIRED,
+                assertThrows(AccountOperationException.class,
+                        () -> service.activate(4L, staff)).getCode());
+        account.recordCustomerIdentityProof(51L, "CASE-00123", customer.getEmail(),
+                java.time.Instant.now());
+        assertEquals(AccountOperationException.Code.CUSTOMER_PASSWORD_NOT_SET,
+                assertThrows(AccountOperationException.class,
+                        () -> service.activate(4L, staff)).getCode());
+        verify(accounts, never()).saveAndFlush(any());
+        verifyNoInteractions(audit);
+    }
+
+    @Test void ownerRecordsProofAndInvitesWithoutEnablingCustomer() {
+        var account = UserAccount.customer(customer, "customer.one", "random-placeholder-hash",
+                new Role("CUSTOMER", "Customer"));
+        when(accounts.lockById(4L)).thenReturn(Optional.of(account));
+        when(accounts.saveAndFlush(account)).thenReturn(account);
+        service.verifyAndInvite(4L, "CASE-00123", staff);
+        assertTrue(account.hasCustomerVerifiedIdentity());
+        assertFalse(account.isEnabled());
+        assertFalse(account.hasCustomerChosenPassword());
+        verify(recovery).inviteCustomer(account, staff.accountId());
+    }
+
+    @Test void delegatedCashierCannotAttestCustomerProof() {
+        var cashier = new AccountPrincipal(61L, null, "cashier.one",
+                Set.of("CASHIER"), Set.of("customer:register"));
+        var denied = assertThrows(AccountOperationException.class,
+                () -> service.verifyAndInvite(4L, "CASE-00123", cashier));
+        assertEquals(AccountOperationException.Code.CUSTOMER_REGISTRATION_NOT_ALLOWED,
+                denied.getCode());
+        verifyNoInteractions(accounts, recovery);
+    }
+
+    @Test void rejectsInvalidUsernameBeforeDatabaseAccess() {
+        var bad = new CustomerAccountCreateRequest(7L, "no spaces allowed");
         assertEquals(AccountOperationException.Code.INVALID_REQUEST,
                 assertThrows(AccountOperationException.class, () -> service.register(bad, staff)).getCode());
         verifyNoInteractions(accounts, customers, roles, passwords);
