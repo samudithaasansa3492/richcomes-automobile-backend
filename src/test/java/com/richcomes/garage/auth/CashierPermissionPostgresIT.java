@@ -3,6 +3,8 @@ package com.richcomes.garage.auth;
 import com.richcomes.garage.auth.dto.CashierPermissionChangeRequest;
 import com.richcomes.garage.auth.entity.UserAccount;
 import com.richcomes.garage.auth.repository.RoleRepository;
+import com.richcomes.garage.auth.repository.PermissionRepository;
+import com.richcomes.garage.auth.exception.AccountOperationException;
 import com.richcomes.garage.auth.repository.UserAccountRepository;
 import com.richcomes.garage.auth.security.AccountPrincipal;
 import com.richcomes.garage.auth.service.CashierPermissionService;
@@ -45,6 +47,7 @@ class CashierPermissionPostgresIT {
     @Autowired EmployeeRepository employees;
     @Autowired UserAccountRepository accounts;
     @Autowired RoleRepository roles;
+    @Autowired PermissionRepository permissions;
     @Autowired CashierPermissionService grants;
     @Autowired UserAccountService staffAccounts;
     @Autowired AccessTokenService tokenService;
@@ -131,6 +134,32 @@ class CashierPermissionPostgresIT {
                 .andExpect(status().isForbidden());
         assertTrue(currentDirectCodes(target).isEmpty());
         assertEquals(4, auditCount(target));
+
+        // Simulate a legacy database row predating this conservative policy:
+        // even with an old signed JWT, financial reports must remain forbidden.
+        var denied = assertThrows(AccountOperationException.class,
+                () -> grants.change(target,
+                        new CashierPermissionChangeRequest("report:read", true), owner));
+        assertEquals(AccountOperationException.Code.INVALID_REQUEST, denied.getCode());
+        tx.executeWithoutResult(status -> {
+            var saved = accounts.findOneById(target).orElseThrow();
+            saved.grantDirectPermission(permissions.findByCode("report:read").orElseThrow());
+            accounts.saveAndFlush(saved);
+        });
+        assertEquals(Set.of("report:read"), currentDirectCodes(target));
+        mvc.perform(get("/api/v1/reports/financial")
+                .header("Authorization", cashierBearer)).andExpect(status().isForbidden());
+
+        // Cleanup must persist and audit one revoke without any new grant path.
+        assertTrue(grants.change(target,
+                new CashierPermissionChangeRequest("report:read", false), owner)
+                .grantedPermissions().isEmpty());
+        assertTrue(currentDirectCodes(target).isEmpty());
+        assertEquals(5, auditCount(target));
+        assertEquals(Boolean.FALSE, sql.queryForObject("""
+                SELECT granted FROM garage.account_permission_audit
+                 WHERE target_account_id = ? AND permission_code = 'report:read'
+                """, Boolean.class, target));
     }
 
     private void assertIsolatedPostgres() throws SQLException {
