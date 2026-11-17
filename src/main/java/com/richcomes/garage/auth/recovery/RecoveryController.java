@@ -42,6 +42,11 @@ public class RecoveryController {
         try { service.request(input.username(), actor.accountId()); } catch (RecoveryFailure ignored) { /* Generic response. */ }
         return accepted();
     }
+    @PostMapping("/api/auth/recovery/initial-password")
+    public ResponseEntity<Void> initialPassword(@Valid @RequestBody Reset input) {
+        service.setupInitialPassword(input.token(), input.password());
+        return accepted();
+    }
     @PostMapping("/api/auth/recovery/reset")
     public ResponseEntity<Void> reset(@Valid @RequestBody Reset input) {
         service.reset(input.token(), input.password()); return accepted();
