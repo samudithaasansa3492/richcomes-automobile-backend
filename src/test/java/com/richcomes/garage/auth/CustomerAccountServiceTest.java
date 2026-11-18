@@ -42,6 +42,7 @@ class CustomerAccountServiceTest {
 
     @BeforeEach void init() {
         service = new CustomerAccountService(accounts, customers, roles, passwords, audit, recovery);
+        ReflectionTestUtils.setField(service, "onboardingEnabled", true);
         customer = new Customer();
         ReflectionTestUtils.setField(customer, "id", 7L);
         customer.setStatus(CustomerStatus.ACTIVE);
@@ -50,6 +51,20 @@ class CustomerAccountServiceTest {
 
     private CustomerAccountCreateRequest request() {
         return new CustomerAccountCreateRequest(7L, "  CUSTOMER.One ");
+    }
+
+    @Test void rolloutFlagOffDeniesEnrollmentAttestationAndActivationBeforeDatabaseAccess() {
+        ReflectionTestUtils.setField(service, "onboardingEnabled", false);
+        assertEquals(AccountOperationException.Code.CUSTOMER_ONBOARDING_UNAVAILABLE,
+                assertThrows(AccountOperationException.class,
+                        () -> service.register(request(), staff)).getCode());
+        assertEquals(AccountOperationException.Code.CUSTOMER_ONBOARDING_UNAVAILABLE,
+                assertThrows(AccountOperationException.class,
+                        () -> service.verifyAndInvite(4L, "CASE-00123", staff)).getCode());
+        assertEquals(AccountOperationException.Code.CUSTOMER_ONBOARDING_UNAVAILABLE,
+                assertThrows(AccountOperationException.class,
+                        () -> service.activate(4L, staff)).getCode());
+        verifyNoInteractions(accounts, customers, roles, passwords, audit, recovery);
     }
 
     @Test void createsDisabledAccountForExistingActiveCustomer() {
