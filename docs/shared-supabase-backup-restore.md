@@ -17,7 +17,7 @@ bash scripts/check-shared-flyway-history-readonly.sh
 
 The wrapper uses a READ ONLY connection and streams *only migration-history metadata* to an offline Python validator. It refuses any unexpected history version, failed entry, missing/renamed migration, duplicate version, installed-rank mismatch or checksum difference. The V14 backup rehearsal script now runs this preflight before dumping data. CI includes the non-sensitive V14 history baseline and regression tests with deliberate checksum/name/version corruption. The baseline must **not** be treated as authoritative for later V15–V23 rollout or silently edited to suppress a drift alarm.
 
-> **Off-site follow-up:** after this V14 local backup + isolated restore passes, use the independently encrypted [Railway bucket upload and recovery guide](railway-private-offsite-backup.md). The Railway private bucket is only **staged**, not yet provisioned; no live Supabase archive or independent off-site restore has been produced yet. Do not apply V15–V23 based on a passing local test alone.
+> **Off-site follow-up:** after this V14 local backup + isolated restore passes, use the independently encrypted [Railway bucket upload and recovery guide](railway-private-offsite-backup.md). A separate private Railway S3 bucket has now been **provisioned live**, but no archive of real Supabase data has been uploaded or independently restored yet; see the S3 API bucket name, endpoint, region and credential instructions in the linked guide. Do not apply V15–V23 based on a passing local test alone.
 
 ## Scope and operator authorization
 
