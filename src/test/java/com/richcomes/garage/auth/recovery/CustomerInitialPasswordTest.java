@@ -78,6 +78,16 @@ class CustomerInitialPasswordTest {
     }
 
     @Test
+    void suspendedCustomerCannotReceiveAnInvitation() {
+        customer.setStatus(CustomerStatus.SUSPENDED);
+        when(delivery.available()).thenReturn(true);
+        assertThrows(RecoveryFailure.class,
+                () -> service.inviteCustomer(customerAccount, 51L));
+        verifyNoInteractions(challenges, encoder, accounts, audit);
+        verify(delivery, never()).send(anyString(), anyString(), anyString());
+    }
+
+    @Test
     void initialPasswordIsSingleUseAndStillRequiresOwnerActivation() {
         var challenge = setupChallenge(NOW.plusSeconds(900), "INITIAL_PASSWORD");
         when(delivery.available()).thenReturn(true);
