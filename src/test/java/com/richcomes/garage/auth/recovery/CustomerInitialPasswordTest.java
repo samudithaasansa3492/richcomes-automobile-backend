@@ -42,6 +42,7 @@ class CustomerInitialPasswordTest {
     void init() {
         var clock = Clock.fixed(NOW, ZoneOffset.UTC);
         service = new RecoveryService(accounts, challenges, audit, encoder, delivery, clock, manager);
+        ReflectionTestUtils.setField(service, "onboardingEnabled", true);
         customer = new Customer();
         ReflectionTestUtils.setField(customer, "id", 12L);
         customer.setEmail("customer@example.invalid");
@@ -50,6 +51,16 @@ class CustomerInitialPasswordTest {
                 new Role("CUSTOMER", "Customer"));
         ReflectionTestUtils.setField(customerAccount, "id", 42L);
         customerAccount.recordCustomerIdentityProof(51L, "CASE-00123", customer.getEmail(), NOW);
+    }
+
+    @Test
+    void customerInvitationAndPasswordSetupFailClosedWhenRolloutDisabled() {
+        ReflectionTestUtils.setField(service, "onboardingEnabled", false);
+        assertThrows(RecoveryFailure.class,
+                () -> service.inviteCustomer(customerAccount, 51L));
+        assertThrows(RecoveryFailure.class,
+                () -> service.setupInitialPassword(TOKEN, PASSWORD));
+        verifyNoInteractions(challenges, delivery, encoder, accounts, audit);
     }
 
     @Test
