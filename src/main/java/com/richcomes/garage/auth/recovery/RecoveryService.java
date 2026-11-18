@@ -42,8 +42,9 @@ public class RecoveryService {
         if (!delivery.available() || account == null || actor == null
                 || !account.isCustomer() || account.isEnabled()
                 || !account.hasCustomerVerifiedIdentity() || account.hasCustomerChosenPassword()
-                || account.getCustomer() == null || account.getCustomer().getEmail() == null
-                || !canSend(account)) {
+                || account.getCustomer() == null
+                || account.getCustomer().getStatus() != com.richcomes.garage.customer.enums.CustomerStatus.ACTIVE
+                || account.getCustomer().getEmail() == null || !canSend(account)) {
             throw new RecoveryFailure();
         }
         String email = account.getCustomer().getEmail().strip().toLowerCase(java.util.Locale.ROOT);
