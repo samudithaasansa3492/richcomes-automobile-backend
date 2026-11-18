@@ -30,6 +30,10 @@ public class SecurityConfig {
                 .oauth2ResourceServer(resource -> resource.authenticationEntryPoint(errors).accessDeniedHandler(errors)
                         .jwt(jwt -> jwt.decoder(decoder).jwtAuthenticationConverter(converter)))
                 .authorizeHttpRequests(access -> access
+                        // Only non-sensitive liveness/readiness signals may be public.
+                        // Health status has no DB URLs, errors or component details.
+                        .requestMatchers(HttpMethod.GET, "/actuator/health/liveness",
+                                "/actuator/health/readiness").permitAll()
                         // Only these static account-recovery assets are public.
                         // No broader static directory bypass or anonymous business API.
                         .requestMatchers(HttpMethod.GET, "/account-setup.html",
