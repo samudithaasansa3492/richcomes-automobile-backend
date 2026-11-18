@@ -24,12 +24,53 @@ public class RecoveryService {
     private final Clock clock;
     private final jakarta.persistence.EntityManager entityManager;
     private final SecureRandom random = new SecureRandom();
+    @org.springframework.beans.factory.annotation.Value("${CUSTOMER_ONBOARDING_ENABLED:false}")
+    private boolean onboardingEnabled;
     public RecoveryService(UserAccountRepository accounts, RecoveryChallengeRepository challenges,
             SecurityAuditRepository audit, PasswordEncoder encoder, RecoveryDelivery delivery, Clock authClock,
             jakarta.persistence.EntityManager entityManager) {
         this.accounts = accounts; this.challenges = challenges; this.audit = audit;
         this.encoder = encoder; this.delivery = delivery; this.clock = authClock;
         this.entityManager = entityManager;
+    }
+
+    /** Restricted to the OWNER-only verified enrollment service. The email
+     * comes from the existing Customer record, never an arbitrary API request.
+     * SMTP must be explicitly configured; otherwise no token is issued. */
+    public void inviteCustomer(UserAccount account, Long actor) {
+        if (!onboardingEnabled) throw new RecoveryFailure();
+        if (!delivery.available() || account == null || actor == null
+                || !account.isCustomer() || account.isEnabled()
+                || !account.hasCustomerVerifiedIdentity() || account.hasCustomerChosenPassword()
+                || account.getCustomer() == null || account.getCustomer().getEmail() == null
+                || !canSend(account)) {
+            throw new RecoveryFailure();
+        }
+        String email = account.getCustomer().getEmail().strip().toLowerCase(java.util.Locale.ROOT);
+        issue(account, "INITIAL_PASSWORD", email, actor);
+    }
+
+    /** Customer proves mailbox possession using one-use, 15-minute token.
+     * The customer does NOT become enabled until OWNER separately activates. */
+    public void setupInitialPassword(String token, String password) {
+        if (!onboardingEnabled) throw new RecoveryFailure();
+        if (!validPasswordInput(password) || password.length() < 15) throw new RecoveryFailure();
+        var challenge = redeem(token, "INITIAL_PASSWORD");
+        var account = lock(challenge.accountId);
+        if (account == null || !account.isCustomer() || account.isEnabled()
+                || !account.hasCustomerVerifiedIdentity() || account.hasCustomerChosenPassword()
+                || account.getCustomer() == null
+                || account.getCustomer().getStatus() != com.richcomes.garage.customer.enums.CustomerStatus.ACTIVE
+                || account.getCustomer().getEmail() == null
+                || !challenge.email.equalsIgnoreCase(account.getCustomer().getEmail().strip())
+                || account.getCredentialVersion() != challenge.credentialVersion) {
+            throw new RecoveryFailure();
+        }
+        account.setCustomerInitialPassword(encoder.encode(password), clock.instant());
+        challenges.deleteByAccountId(account.getId());
+        audit.save(new SecurityAuditEvent(null, account.getId(),
+                "CUSTOMER_PASSWORD_ESTABLISHED", clock.instant()));
+        // Still disabled. No bearer token or auto-login is issued here.
     }
 
     public void enroll(Long accountId, String password, String email) {

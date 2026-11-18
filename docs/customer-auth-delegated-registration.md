@@ -1,5 +1,14 @@
 # Customer login, staff registration and per-cashier delegation
 
+> **Historical V21 description — replaced by the V23 verified customer onboarding flow.**
+> Do not use the staff-supplied password or direct activation steps below for new
+> customers. See [Verified CUSTOMER onboarding](verified-customer-onboarding.md):
+> staff only create disabled accounts, OWNER verifies a separate case record,
+> Customer sets their own password using a one-use email token, and OWNER
+> activates only after both recorded prerequisites. The old examples below
+> are preserved solely as pre-V23 history; they are no longer valid API guidance.
+
+
 ## Identity boundaries
 
 - `BUSINESS` staff: `OWNER`, `CASHIER`, and existing technical-deny behavior. Requires an active non-technician Employee.

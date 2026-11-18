@@ -1,5 +1,18 @@
 # PR #27 → #29 → #31: merge and release gates
 
+> **Integration update (2026-11-18):** PR #27, #29 and #31 are merged into
+> `main` (commit `731c89135ab20b635701f4ce9333a339507fd7fe`).
+> Draft PR #35 proposes CUSTOMER identity-proof/first-password V23, plus
+> a **separate approval-gated operator script** for exposed migration metadata
+> (not a V24 Flyway migration). The shared `richcomes-automobile-dev`
+> project was independently inspected **read-only**: 14 successful Flyway
+> migrations (V1–V14), no `garage.user_accounts` yet, and
+> `public.flyway_schema_history` has RLS OFF with effective SELECT to `anon`
+> and `authenticated`. No backup confirmation or deployment sign-off exists.
+> Do not apply V15–V23 on the shared project until a database owner confirms
+> actual backups/restore and the separate rollout authorization.
+
+
 **Status: draft planning, not a deployment authorization.** This checklist is meant to stop repeated history-only merges and keep code integration distinct from applying Flyway migrations to the shared Supabase project.
 
 ## Automated evidence (exact revisions)
