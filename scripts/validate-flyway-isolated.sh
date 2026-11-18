@@ -184,13 +184,33 @@ verify_business_delegation() {
   echo "PASS: ${db} explicit OWNER business permissions, no CASHIER wildcard grants, audit RLS"
 }
 
+verify_browser_denial() {
+  local db="$1" count
+  count="$(docker exec "$CONTAINER" psql -U postgres -d "richcomes_${db}" -Atc "
+    SELECT count(*) FROM pg_class c
+    JOIN pg_namespace n ON n.oid=c.relnamespace
+    CROSS JOIN (VALUES ('anon'),('authenticated')) AS browser(role_name)
+    WHERE n.nspname='garage' AND c.relkind IN ('r','p','v','m')
+      AND (has_schema_privilege(browser.role_name, n.oid, 'USAGE')
+           OR has_table_privilege(browser.role_name, c.oid, 'SELECT')
+           OR has_table_privilege(browser.role_name, c.oid, 'INSERT')
+           OR has_table_privilege(browser.role_name, c.oid, 'UPDATE')
+           OR has_table_privilege(browser.role_name, c.oid, 'DELETE'))"
+  )"
+  test "$count" = 0 || {
+    echo "FAIL: ${db} grants direct browser-role access to garage objects"; exit 1;
+  }
+  echo "PASS: ${db} garage schema is inaccessible to anon/authenticated roles"
+}
+
 echo '=== Fresh install V1-V23 ==='
 flyway fresh latest
 verify_count fresh
 verify_customer_security fresh
 verify_business_delegation fresh
+verify_browser_denial fresh
 
-echo '=== Simulate upgrade V1-V14 to V22 ==='
+echo '=== Simulate upgrade V1-V14 to V23 ==='
 flyway upgrade 14
 flyway upgrade 18
 
@@ -214,6 +234,7 @@ flyway upgrade latest
 verify_count upgrade
 verify_customer_security upgrade
 verify_business_delegation upgrade
+verify_browser_denial upgrade
 owner_count="$(docker exec "$CONTAINER" psql -U postgres -d richcomes_upgrade -Atc \
   "SELECT count(*) FROM garage.user_accounts a JOIN garage.user_account_roles ar ON ar.user_account_id=a.id JOIN garage.roles r ON r.id=ar.role_id JOIN garage.employees e ON e.id=a.employee_id WHERE a.username='validation.owner' AND a.enabled AND a.identity_kind='BUSINESS' AND r.code='OWNER' AND e.position='OWNER'")"
 test "$owner_count" = 1 || { echo 'FAIL: synthetic legacy OWNER was not preserved'; exit 1; }
