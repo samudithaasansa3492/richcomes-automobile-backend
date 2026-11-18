@@ -24,6 +24,8 @@ public class RecoveryService {
     private final Clock clock;
     private final jakarta.persistence.EntityManager entityManager;
     private final SecureRandom random = new SecureRandom();
+    @org.springframework.beans.factory.annotation.Value("${CUSTOMER_ONBOARDING_ENABLED:false}")
+    private boolean onboardingEnabled;
     public RecoveryService(UserAccountRepository accounts, RecoveryChallengeRepository challenges,
             SecurityAuditRepository audit, PasswordEncoder encoder, RecoveryDelivery delivery, Clock authClock,
             jakarta.persistence.EntityManager entityManager) {
@@ -36,6 +38,7 @@ public class RecoveryService {
      * comes from the existing Customer record, never an arbitrary API request.
      * SMTP must be explicitly configured; otherwise no token is issued. */
     public void inviteCustomer(UserAccount account, Long actor) {
+        if (!onboardingEnabled) throw new RecoveryFailure();
         if (!delivery.available() || account == null || actor == null
                 || !account.isCustomer() || account.isEnabled()
                 || !account.hasCustomerVerifiedIdentity() || account.hasCustomerChosenPassword()
@@ -50,6 +53,7 @@ public class RecoveryService {
     /** Customer proves mailbox possession using one-use, 15-minute token.
      * The customer does NOT become enabled until OWNER separately activates. */
     public void setupInitialPassword(String token, String password) {
+        if (!onboardingEnabled) throw new RecoveryFailure();
         if (!validPasswordInput(password) || password.length() < 15) throw new RecoveryFailure();
         var challenge = redeem(token, "INITIAL_PASSWORD");
         var account = lock(challenge.accountId);
