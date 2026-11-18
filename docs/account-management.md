@@ -60,4 +60,4 @@ effective business authorities even if a business grant/OWNER role is attached.
 Technician employees cannot receive or enable accounts, replace roles, authenticate,
 or retain bearer access. Employee position changes to TECHNICIAN are rejected when
 an account exists. Account creation and employee updates also acquire the OWNER lock.
-Technical recovery endpoints are not implemented in this change; see role-model.md.
+Technical recovery and customer setup/recovery endpoints are now implemented in merged main through subsequent changes; see verified-customer-onboarding.md and the first-party account-setup.html page. For historical role boundaries see role-model.md.
