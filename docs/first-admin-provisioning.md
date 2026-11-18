@@ -4,8 +4,7 @@
 
 This code includes V18/V19 SQL and an explicit operator command. It does not apply migrations
 to shared Supabase or provision an account there. Shared migration/data changes require
-separate approval. **Normal Spring Boot startup runs pending Flyway migrations**, including
-V15–V20: do not start the application against the shared database before rollout approval.
+separate approval. **Current merged Spring Boot startup disables Flyway by default** via `FLYWAY_ENABLED=false` (PR #36). Do not enable it against the shared V14 database until an actual recoverable backup and approved V15–V23 rollout exist. Older pre-PR #36 startup behavior was unsafe and is not current guidance.
 
 V18 seeds the identity roles; V19 corrects its original
 OWNER_ADMIN/TECHNICIAN role model. After V1–V19 the role definitions are:
