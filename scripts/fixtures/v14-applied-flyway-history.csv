@@ -1,0 +1,14 @@
+1,1,V1__create_employees.sql,1050085485,t
+2,2,V2__create_customers.sql,81492669,t
+3,3,V3__create_vehicles.sql,1907522012,t
+4,4,V4__create_appointments.sql,1292542662,t
+5,5,V5__update_vehicle_validation.sql,-215499668,t
+6,6,V6__restore_missing_appointments.sql,-668964705,t
+7,7,V7__create_inventory_tables.sql,2012550799,t
+8,8,V8__create_service_and_job_tables.sql,-807076975,t
+9,9,V9__create_service_history.sql,-150792093,t
+10,10,V10__create_notifications.sql,1974591092,t
+11,11,V11__create_audit_logs.sql,1668528455,t
+12,12,V12__create_service_reminders.sql,-1345484570,t
+13,13,V13__create_job_items_and_parts.sql,-1342728771,t
+14,14,V14__create_invoice_tables.sql,-2135815917,t
