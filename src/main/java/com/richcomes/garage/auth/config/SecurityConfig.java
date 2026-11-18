@@ -30,6 +30,10 @@ public class SecurityConfig {
                 .oauth2ResourceServer(resource -> resource.authenticationEntryPoint(errors).accessDeniedHandler(errors)
                         .jwt(jwt -> jwt.decoder(decoder).jwtAuthenticationConverter(converter)))
                 .authorizeHttpRequests(access -> access
+                        // Only these static account-recovery assets are public.
+                        // No broader static directory bypass or anonymous business API.
+                        .requestMatchers(HttpMethod.GET, "/account-setup.html",
+                                "/account-setup.css", "/account-setup.js").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/recovery/request",
                                 "/api/auth/recovery/reset", "/api/auth/recovery/email/confirm",
                                 "/api/auth/recovery/initial-password").permitAll()

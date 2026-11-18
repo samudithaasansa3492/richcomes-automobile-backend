@@ -54,6 +54,13 @@ jobs:
           bash -n scripts/backup-garage-with-restore-rehearsal.sh
           bash -n scripts/validate-flyway-isolated.sh
 
+      - name: Validate recovery client security flows (no network or secrets)
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check src/main/resources/static/account-setup.js
+          node scripts/test-account-setup-client.mjs
+
       - name: Selected regression tests (no external database)
         shell: bash
         run: |
