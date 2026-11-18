@@ -1,7 +1,7 @@
 # Supabase Free-tier recovery — private Railway off-site archive
 
 **Release gate remains OPEN until an independently recovered real snapshot is proven.**
-This guide is an operator workflow, not a claim that a real customer database backup was performed. A Railway project named `richcomes-automobile` exists. Its private bucket `richcomes-release-backups` has been **staged, not yet provisioned**. The app service is also staged and has not been launched. Do not accept the whole Railway environment patch merely to create the bucket: the app is intentionally blocked until DB/JWT configuration exists.
+This guide is an operator workflow, not a claim that a real customer database backup was performed. A Railway project named `richcomes-automobile` exists. A **private Railway S3 backup bucket is now provisioned and LIVE**, separate from the staged application. Railway display name: `richcomes-offsite-backups-live`; actual S3 bucket name: `functional-locker-mh5j-coszp`; endpoint: `https://t3.storageapi.dev`; region: `auto`; addressing style: virtual host. These non-secret settings were read back from the Railway bucket connection. **Credentials were redacted by OAuth** and must be entered privately by an authorized operator. The application service remains STAGED/unlaunched; do not accept the entire Railway pending patch merely for the bucket. No real Supabase archive has been uploaded.
 
 ## Scope and limitations
 
@@ -13,8 +13,8 @@ The new `scripts/railway-offsite-backup.sh` does **not connect to Supabase**. It
 
 ## One-time setup (secrets only on operator machine)
 
-1. Provision a **restricted private** Railway bucket in `sin` (Singapore) and check your plan's usage limit, retention, retrieval costs and access. Do not use an unverified bucket as the sole disaster recovery copy. Railway bucket pricing/usage limits: [official documentation](https://docs.railway.com/storage-buckets/billing).
-2. In Railway Dashboard, open bucket credentials and privately configure the AWS CLI `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` and `RICHCOMES_S3_ENDPOINT`. Set `RICHCOMES_BACKUP_BUCKET=richcomes-release-backups`. Do **not** paste keys in ChatGPT, Jira, GitHub, CI logs or a committed `.env`. Prefer `AWS_PROFILE` stored in a personal credentials file with `chmod 600`.
+1. Verify the already-provisioned **restricted private** Railway bucket and its S3 API name, region and endpoint from the Railway dashboard before use. Bucket storage is in the `sin` location, but its S3 client region is **`auto`**, as returned by the credentials API. Check your plan's usage limit, retention, retrieval costs and access. Do not use an unverified bucket as the sole disaster recovery copy. Railway bucket pricing/usage limits: [official documentation](https://docs.railway.com/storage-buckets/billing).
+2. In Railway Dashboard, open bucket credentials and privately configure the AWS CLI `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` and `RICHCOMES_S3_ENDPOINT`. Set `RICHCOMES_BACKUP_BUCKET=functional-locker-mh5j-coszp` (the **S3 API bucket name**, not the Railway display name). Do **not** paste keys in ChatGPT, Jira, GitHub, CI logs or a committed `.env`. Prefer `AWS_PROFILE` stored in a personal credentials file with `chmod 600`.
 3. Generate an `age` X25519 identity on an **offline/restricted backup custodian device** using the installed `age-keygen` command. Save the private key in a secure credential vault with independent recovery custodians and only release the *public recipient* (`age1...`) to the upload operator. Do not commit, email or paste the identity key.
 4. Install trusted recent versions of `aws` CLI, `age`, `postgresql-client-17` and `docker` on the operator workstation. Confirm `aws --version`, `age --version`, `pg_restore --version` and `docker info`.
 
@@ -27,25 +27,25 @@ Use your private database connection and a formal pause of writes, following the
 In the private workstation shell (values intentionally omitted):
 
 ```bash
-export RICHCOMES_BACKUP_BUCKET=richcomes-release-backups
-export RICHCOMES_S3_ENDPOINT='https://<bucket-endpoint-from-Railway>'
-export AWS_REGION='<bucket-region-from-Railway>'
+export RICHCOMES_BACKUP_BUCKET=functional-locker-mh5j-coszp
+export RICHCOMES_S3_ENDPOINT='https://t3.storageapi.dev'
+export AWS_REGION=auto
 export AWS_PROFILE='<private-credentials-profile>'
 export RICHCOMES_AGE_RECIPIENT='age1...public-recipient...'
 
 bash scripts/railway-offsite-backup.sh upload '/absolute/private/verified-snapshot-directory'
 ```
 
-The command refuses any missing files, mismatched source project/history, missing local restore evidence, corrupt checksum, unencrypted bucket endpoint, or Git-based snapshot location. It creates the encrypted archive in a temporary private folder, **never stores a combined plaintext tar archive on disk**, uploads to an object key with a random suffix, retrieves the encrypted object and compares bytes. The command prints an `BACKUP_OBJECT_KEY` and `BACKUP_CIPHERTEXT_SHA256`. Store these two *nonsensitive* values in the restricted release evidence record. It explicitly reports that independent restore is **NOT YET VERIFIED**.
+Use your AWS CLI profile's `s3.addressing_style=virtual` setting for the Railway endpoint. Confirm credentials privately in Railway's bucket settings. The command refuses any missing files, mismatched source project/history, missing local restore evidence, corrupt checksum, unencrypted bucket endpoint, or Git-based snapshot location. It creates the encrypted archive in a temporary private folder, **never stores a combined plaintext tar archive on disk**, uploads to an object key with a random suffix, retrieves the encrypted object and compares bytes. The command prints an `BACKUP_OBJECT_KEY` and `BACKUP_CIPHERTEXT_SHA256`. Store these two *nonsensitive* values in the restricted release evidence record. It explicitly reports that independent restore is **NOT YET VERIFIED**.
 
 ## Step 3 — independent restore from off-site (separate trusted operator/device)
 
 On a **different** secure recovery machine, configure the same bucket read-only access and the **private** age identity file (chmod 600) from the approved custodian. Only give the command the previously recorded **object key and SHA-256**; do not provide database credentials.
 
 ```bash
-export RICHCOMES_BACKUP_BUCKET=richcomes-release-backups
-export RICHCOMES_S3_ENDPOINT='https://<bucket-endpoint-from-Railway>'
-export AWS_REGION='<bucket-region-from-Railway>'
+export RICHCOMES_BACKUP_BUCKET=functional-locker-mh5j-coszp
+export RICHCOMES_S3_ENDPOINT='https://t3.storageapi.dev'
+export AWS_REGION=auto
 export AWS_PROFILE='<restricted-read-profile>'
 export RICHCOMES_AGE_IDENTITY_FILE='/secure/private/age-identity.txt'
 
