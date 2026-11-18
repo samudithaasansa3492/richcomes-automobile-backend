@@ -46,6 +46,9 @@ before="$(psql -X -qAt -v ON_ERROR_STOP=1 -c "$preflight_sql")" ||
 [[ "${before##*:}" == "14" ]] ||
   die "This pre-V15 backup procedure is gated for current V14 source, found $before"
 printf 'Verified source project and Flyway state: %s\n' "$before"
+# A matching version number alone is not enough: refuse silently rewritten
+# historical SQL before exporting or attempting a release.
+bash "$repo/scripts/check-shared-flyway-history-readonly.sh"
 
 # A dedicated private folder only becomes the final deliverable after the restore test.
 scratch="$(mktemp -d "$dest/.richcomes-unverified.XXXXXXXX")"
