@@ -14,7 +14,8 @@ class SchemaCompatibilityStartupGuardTest {
         when(jdbc.queryForObject(anyString(), eq(Integer.class))).thenReturn(5);
         when(jdbc.queryForObject(anyString(), eq(Boolean.class))).thenReturn(true);
         assertDoesNotThrow(() -> new SchemaCompatibilityStartupGuard(jdbc).run(null));
-        verify(jdbc, times(2)).queryForObject(anyString(), any());
+        verify(jdbc).queryForObject(anyString(), eq(Integer.class));
+        verify(jdbc).queryForObject(anyString(), eq(Boolean.class));
     }
 
     @Test
