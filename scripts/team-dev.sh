@@ -39,9 +39,15 @@ case "$ACTION" in
       openssl pkey -in "$RICHCOMES_TEAM_STATE/private.pem" -pubout \
         -out "$RICHCOMES_TEAM_STATE/public.pem" >/dev/null 2>&1
       openssl rand -hex 24 > "$RICHCOMES_TEAM_STATE/password"
-      chmod 600 "$RICHCOMES_TEAM_STATE/"*
+      chmod 600 "$RICHCOMES_TEAM_STATE/password"
+      # These keys are throwaway LOCAL fixtures only; the parent host directory
+      # is mode 0700. Bind-mounted Compose file secrets must be readable by
+      # the unprivileged runtime UID 10001 (mode remapping is not guaranteed).
+      chmod 644 "$RICHCOMES_TEAM_STATE/private.pem" "$RICHCOMES_TEAM_STATE/public.pem"
     fi
     export RICHCOMES_TEAM_PASSWORD="$(cat "$RICHCOMES_TEAM_STATE/password")"
+    chmod 600 "$RICHCOMES_TEAM_STATE/password"
+    chmod 644 "$RICHCOMES_TEAM_STATE/private.pem" "$RICHCOMES_TEAM_STATE/public.pem"
     # No real Supabase or external JDBC endpoint is ever configured by Compose.
     docker compose --project-name "$PROJECT" -f "$COMPOSE" up -d --build
     echo "Team backend started at http://127.0.0.1:$RICHCOMES_TEAM_PORT"
@@ -64,7 +70,7 @@ case "$ACTION" in
     require curl
     [[ -r "$RICHCOMES_TEAM_STATE/password" ]] || { echo "STOP: no local fixture" >&2; exit 2; }
     export RICHCOMES_TEAM_PASSWORD="$(cat "$RICHCOMES_TEAM_STATE/password")"
-    response="$(curl -fsS --max-time 8 "http://127.0.0.1:$RICHCOMES_TEAM_PORT/actuator/health/readiness")" ||
+    response="$(curl -fsS --max-time 8 "http://127.0.0.1:$RICHCOMES_TEAM_PORT/actuator/health/readiness" 2>/dev/null)" ||
       { echo "FAIL: backend readiness not UP" >&2; exit 1; }
     [[ "$response" == *'"status":"UP"'* ]] || { echo "FAIL: unexpected readiness response" >&2; exit 1; }
     count="$(docker compose --project-name "$PROJECT" -f "$COMPOSE" exec -T database \
@@ -76,13 +82,21 @@ case "$ACTION" in
       { echo "FAIL: local PostgreSQL unexpectedly published" >&2; exit 1; }
     echo "PASS: disposable team backend readiness UP; migrations V1-V23; DB port private"
     ;;
+  logs)
+    container_id="$(docker ps -aq --filter "name=^/${PROJECT}-backend-1$" | head -n 1)"
+    [[ -n "$container_id" ]] || { echo "STOP: team backend container not found" >&2; exit 2; }
+    docker logs --tail 100 "$container_id" 2>&1 |
+      sed -E 's/[A-Za-z0-9_-]{43}/[redacted-token]/g' |
+      grep -E 'Exception|ERROR|WARN|started|Started|Flyway|permission|denied|certificate|Could not' |
+      tail -n 45 || true
+    ;;
   status)
     [[ -r "$RICHCOMES_TEAM_STATE/password" ]] || { echo "STOP: no local fixture" >&2; exit 2; }
     export RICHCOMES_TEAM_PASSWORD="$(cat "$RICHCOMES_TEAM_STATE/password")"
     docker compose --project-name "$PROJECT" -f "$COMPOSE" ps
     ;;
   *)
-    echo "Usage: bash scripts/team-dev.sh [up|verify|status|down]" >&2
+    echo "Usage: bash scripts/team-dev.sh [up|verify|status|logs|down]" >&2
     exit 2
     ;;
 esac
