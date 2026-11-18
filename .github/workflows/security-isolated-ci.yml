@@ -104,11 +104,16 @@ jobs:
           ready=0
           for i in $(seq 1 90); do
             if bash scripts/team-dev.sh verify; then ready=1; break; fi
+            container_id="$(docker ps -aq --filter "name=^/richcomes-team-$(id -u)-backend-1$" | head -n 1)"
+            if [ -n "$container_id" ] && [ "$(docker inspect -f '{{.State.Status}}' "$container_id" 2>/dev/null)" = "exited" ]; then
+              echo "Backend exited during smoke test"
+              break
+            fi
             sleep 2
           done
           if [ "$ready" -ne 1 ]; then
             echo "FAIL: disposable team backend did not become ready"
-            docker compose -p "richcomes-team-$(id -u)" -f compose.team-dev.yml logs --no-color --tail=50 backend               | sed -E 's/[A-Za-z0-9_-]{43}/[redacted-token]/g' || true
+            bash scripts/team-dev.sh logs || true
             exit 1
           fi
           test "$(curl -s -o /dev/null -w '%{http_code}'             http://127.0.0.1:18080/actuator/env)" = "401"
