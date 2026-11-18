@@ -6,7 +6,7 @@ set +x
 umask 077
 
 die() { printf 'STOP: %s\n' "$*" >&2; exit 2; }
-for tool in psql pg_dump pg_restore docker sha256sum mktemp realpath; do
+for tool in psql pg_dump pg_restore docker sha256sum mktemp realpath python3; do
   command -v "$tool" >/dev/null || die "Required tool missing: $tool"
 done
 docker info >/dev/null 2>&1 || die "Docker daemon must be available"
@@ -46,6 +46,9 @@ before="$(psql -X -qAt -v ON_ERROR_STOP=1 -c "$preflight_sql")" ||
 [[ "${before##*:}" == "14" ]] ||
   die "This pre-V15 backup procedure is gated for current V14 source, found $before"
 printf 'Verified source project and Flyway state: %s\n' "$before"
+# A matching version number alone is not enough: refuse silently rewritten
+# historical SQL before exporting or attempting a release.
+bash "$repo/scripts/check-shared-flyway-history-readonly.sh"
 
 # A dedicated private folder only becomes the final deliverable after the restore test.
 scratch="$(mktemp -d "$dest/.richcomes-unverified.XXXXXXXX")"

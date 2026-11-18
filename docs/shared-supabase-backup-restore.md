@@ -2,6 +2,21 @@
 
 **Status (2026-11-18): NOT executed on the shared database.** The connected Supabase organization is on Free; scheduled daily backup and PITR were not verified. Flyway V15–V23 remain **unapplied** to `richcomes-automobile-dev`, and onboarding must remain OFF. Do not interpret GitHub CI or a GitHub repo commit as a verified backup.
 
+## Read-only V14 checksum preflight (verified 2026-11-19)
+
+The connected shared dev Supabase project's actual `public.flyway_schema_history` was read via SELECT: **all V1–V14 scripts, success flags and Flyway CRC32 checksums matched the unmodified `main` source files**. This comparison is a **read-only** code-vs-history integrity check. It does **not** mean the V15–V23 changes are applied, that a backup has been performed, or that a migration window is safe.
+
+An operator can repeat the check without making any database changes:
+
+```bash
+# With private PGPASSFILE (chmod 600), exact-project PGHOST/PGUSER,
+# PGPORT=5432, PGDATABASE=postgres and PGSSLMODE=require already set:
+export RICHCOMES_CONFIRM_PROJECT=iehuxwbrwfysgujaqagj
+bash scripts/check-shared-flyway-history-readonly.sh
+```
+
+The wrapper uses a READ ONLY connection and streams *only migration-history metadata* to an offline Python validator. It refuses any unexpected history version, failed entry, missing/renamed migration, duplicate version, installed-rank mismatch or checksum difference. The V14 backup rehearsal script now runs this preflight before dumping data. CI includes the non-sensitive V14 history baseline and regression tests with deliberate checksum/name/version corruption. The baseline must **not** be treated as authoritative for later V15–V23 rollout or silently edited to suppress a drift alarm.
+
 ## Scope and operator authorization
 
 Only run `scripts/backup-garage-with-restore-rehearsal.sh` **on an authorized workstation/Codespace** with PostgreSQL 17 `pg_dump`, `pg_restore`, `psql`, Docker and a private, encrypted off-site destination. Require a maintenance window with writes paused, the exact intended Supabase project, and a private database password source. This operator tool performs **only SQL reads against Supabase**; the restore runs in a disposable, **network-disabled** PostgreSQL 17 container. No source data are sent to CI or committed to GitHub.
