@@ -91,3 +91,30 @@ jobs:
         run: |
           set -euo pipefail
           docker build --tag richcomes-backend:ci .
+
+      - name: Smoke test disposable team backend on Compose (isolated)
+        shell: bash
+        timeout-minutes: 12
+        run: |
+          set -euo pipefail
+          bash -n scripts/team-dev.sh
+          docker compose --version
+          trap 'bash scripts/team-dev.sh down || true' EXIT
+          bash scripts/team-dev.sh up
+          ready=0
+          for i in $(seq 1 90); do
+            if bash scripts/team-dev.sh verify; then ready=1; break; fi
+            container_id="$(docker ps -aq --filter "name=^/richcomes-team-$(id -u)-backend-1$" | head -n 1)"
+            if [ -n "$container_id" ] && [ "$(docker inspect -f '{{.State.Status}}' "$container_id" 2>/dev/null)" = "exited" ]; then
+              echo "Backend exited during smoke test"
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo "FAIL: disposable team backend did not become ready"
+            bash scripts/team-dev.sh logs || true
+            exit 1
+          fi
+          test "$(curl -s -o /dev/null -w '%{http_code}'             http://127.0.0.1:18080/actuator/env)" = "401"
+          echo "PASS: team backend fully started and authenticated routes remain protected"

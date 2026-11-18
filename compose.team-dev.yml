@@ -1,0 +1,63 @@
+# Disposable local/Codespaces backend for team development ONLY.
+# Runs zero connections to real Supabase and never stores real customer data.
+services:
+  database:
+    image: postgres:17.12
+    environment:
+      POSTGRES_DB: richcomes_team
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${RICHCOMES_TEAM_PASSWORD:?Run bash scripts/team-dev.sh up}
+    tmpfs:
+      - /var/lib/postgresql/data:rw,nosuid,size=768m
+    volumes:
+      - ./scripts/team-dev-supabase-roles.sql:/docker-entrypoint-initdb.d/01-dev-roles.sql:ro
+    networks:
+      - database_internal
+    healthcheck:
+      test: ["CMD-SHELL", "PGPASSWORD=\"$$POSTGRES_PASSWORD\" pg_isready -h 127.0.0.1 -U postgres -d richcomes_team"]
+      interval: 3s
+      timeout: 3s
+      retries: 40
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      database:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://database:5432/richcomes_team?sslmode=disable
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${RICHCOMES_TEAM_PASSWORD:?Run bash scripts/team-dev.sh up}
+      PORT: "8080"
+      JWT_ISSUER: https://local-team-dev.invalid
+      JWT_AUDIENCE: richcomes-team-dev
+      JWT_PRIVATE_KEY_LOCATION: file:/run/secrets/richcomes-team-jwt-private
+      JWT_PUBLIC_KEY_LOCATION: file:/run/secrets/richcomes-team-jwt-public
+      # The ONLY place where Flyway may auto-run here is this disposable local DB.
+      FLYWAY_ENABLED: "true"
+      CUSTOMER_ONBOARDING_ENABLED: "false"
+      APP_RECOVERY_ENABLED: "false"
+      SPRING_MAIL_HOST: ""
+      SPRING_PROFILES_ACTIVE: team-dev
+    secrets:
+      - richcomes-team-jwt-private
+      - richcomes-team-jwt-public
+    ports:
+      - "127.0.0.1:${RICHCOMES_TEAM_PORT:-18080}:8080"
+    networks:
+      - database_internal
+      - local_http
+    restart: "no"
+
+secrets:
+  richcomes-team-jwt-private:
+    file: ${RICHCOMES_TEAM_STATE:?Run bash scripts/team-dev.sh up}/private.pem
+  richcomes-team-jwt-public:
+    file: ${RICHCOMES_TEAM_STATE:?Run bash scripts/team-dev.sh up}/public.pem
+
+networks:
+  database_internal:
+    internal: true
+  local_http: {}
