@@ -47,6 +47,13 @@ jobs:
           java -version
           docker info >/dev/null
 
+      - name: Validate guarded backup script syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/backup-garage-with-restore-rehearsal.sh
+          bash -n scripts/validate-flyway-isolated.sh
+
       - name: Selected regression tests (no external database)
         shell: bash
         run: |
