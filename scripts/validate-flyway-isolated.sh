@@ -203,6 +203,34 @@ verify_browser_denial() {
   echo "PASS: ${db} garage schema is inaccessible to anon/authenticated roles"
 }
 
+verify_isolated_backup_roundtrip() {
+  echo '=== Exercise custom-format garage and history backup/restore on disposable V14 ==='
+  docker exec "$CONTAINER" pg_dump -U postgres -d richcomes_upgrade \
+    --format=custom --no-owner --no-acl --schema=garage \
+    -f /tmp/garage-v14-ci.dump
+  docker exec "$CONTAINER" pg_dump -U postgres -d richcomes_upgrade \
+    --format=custom --no-owner --no-acl --table=public.flyway_schema_history \
+    -f /tmp/flyway-history-v14-ci.dump
+  docker exec "$CONTAINER" pg_restore --list /tmp/garage-v14-ci.dump >/dev/null
+  docker exec "$CONTAINER" pg_restore --list /tmp/flyway-history-v14-ci.dump >/dev/null
+  docker exec "$CONTAINER" createdb -U postgres richcomes_restore
+  docker exec "$CONTAINER" pg_restore --exit-on-error --no-owner --no-acl \
+    -U postgres -d richcomes_restore /tmp/garage-v14-ci.dump
+  docker exec "$CONTAINER" pg_restore --exit-on-error --no-owner --no-acl \
+    -U postgres -d richcomes_restore /tmp/flyway-history-v14-ci.dump
+  local query original restored
+  query="SELECT (SELECT count(*) FROM public.flyway_schema_history WHERE success)::text || ':' ||
+                (SELECT count(*) FROM garage.stock_categories)::text || ':' ||
+                (SELECT count(*) FROM garage.suppliers)::text || ':' ||
+                (SELECT count(*) FROM garage.employees)::text"
+  original="$(docker exec "$CONTAINER" psql -U postgres -d richcomes_upgrade -Atc "$query")"
+  restored="$(docker exec "$CONTAINER" psql -U postgres -d richcomes_restore -Atc "$query")"
+  test "$original" = "$restored" || {
+    echo 'FAIL: isolated garage V14 backup/restore row counts differ'; exit 1;
+  }
+  echo 'PASS: custom-format V14 app schema/history successfully restored on throwaway PostgreSQL'
+}
+
 echo '=== Fresh install V1-V23 ==='
 flyway fresh latest
 verify_count fresh
@@ -212,6 +240,7 @@ verify_browser_denial fresh
 
 echo '=== Simulate upgrade V1-V14 to V23 ==='
 flyway upgrade 14
+verify_isolated_backup_roundtrip
 flyway upgrade 18
 
 # Synthetic legacy OWNER_ADMIN account exists only in the throwaway upgrade DB.
