@@ -22,6 +22,18 @@ The legacy account enrollment let staff supply a password and later enabled an a
 - OWNER can manually attest through the API, so operational signoff of the proof verification workflow remains a release gate. Never mark Issue #32 fully resolved until this SOP and actual customer-facing setup page are approved.
 
 
+## First-party HTTPS account setup/recovery page (shipping code; deployment still required)
+
+The backend now includes a dependency-free, same-origin page at `GET /account-setup.html` plus the exact public `/account-setup.js` and `/account-setup.css` assets. The page supports **all three recovery challenge purposes** used by the existing SMTP sender:
+
+- `INITIAL_PASSWORD` → `POST /api/auth/recovery/initial-password` (new customer chooses the initial password; OWNER must separately activate afterward).
+- `RESET_PASSWORD` → `POST /api/auth/recovery/reset`.
+- `VERIFY_EMAIL` → `POST /api/auth/recovery/email/confirm`.
+
+All three use the existing `#purpose=...&token=...` URL fragment. The page immediately removes the fragment from the visible address, refuses non-secure origins using `window.isSecureContext`, uses same-origin `fetch`, avoids cookies, local storage, analytics, external JS/CSS and password/token logging, and clears password input fields after submission. Its CSP disallows third-party resources and form navigation. Spring Security permits **only these three GET paths** anonymously; no business endpoint is opened.
+
+**Deployment configuration:** serve Spring Boot behind an approved HTTPS origin with appropriate TLS termination, response caching controls, restrictive reverse-proxy referrer policy, and the correct public origin. Set `app.recovery.page=https://<approved-same-origin>/account-setup.html` (no query/fragment) and enable `app.recovery.enabled=true` **only with reviewed TLS SMTP**. Verify all purpose links in a disposable test environment, test delivery and client access across supported browsers, and confirm the exact URL in email templates. A page committed to GitHub is **not** a deployed HTTPS client; external DNS/TLS/SMTP configuration and operational verification are still outstanding. Customer enrollment remains gated separately by `CUSTOMER_ONBOARDING_ENABLED=false` until Issue #32 is signed off.
+
 ## Independent rollout feature flag (default OFF)
 
 `CUSTOMER_ONBOARDING_ENABLED=false` (the default if unset) now blocks disabled-account enrollment, OWNER identity attestation/invitation, account activation, and customer initial-password setup. These fail before database changes or email delivery. Staff recovery email delivery can be configured independently; **`app.recovery.enabled=true` alone must not enable onboarding.**
