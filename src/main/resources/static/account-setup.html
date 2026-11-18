@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; object-src 'none'; form-action 'none'">
+  <title>Richcomes | Account security</title>
+  <link rel="stylesheet" href="/account-setup.css">
+  <script src="/account-setup.js" defer></script>
+</head>
+<body>
+  <main class="panel">
+    <p class="eyebrow">RICHCOMES AUTOMOBILE</p>
+    <h1 id="page-title">Secure account setup</h1>
+    <p class="description" id="intro">Checking your one-time link.</p>
+
+    <form id="password-form" hidden novalidate>
+      <label for="new-password">Choose a password</label>
+      <input id="new-password" name="new-password" type="password"
+             minlength="15" maxlength="72" autocomplete="new-password"
+             spellcheck="false" required>
+      <label for="confirm-password">Confirm password</label>
+      <input id="confirm-password" name="confirm-password" type="password"
+             minlength="15" maxlength="72" autocomplete="new-password"
+             spellcheck="false" required>
+      <p class="hint">At least 15 characters and at most 72 UTF-8 bytes. Do not reuse a password.</p>
+      <button id="password-submit" type="submit">Save password</button>
+    </form>
+
+    <form id="confirm-form" hidden>
+      <button id="confirm-submit" type="submit">Confirm email address</button>
+    </form>
+
+    <p id="status" class="status" role="status" aria-live="polite"></p>
+    <p class="footnote">Never share a setup or recovery link with anyone, including garage staff.
+      If the link has expired, request a new invitation from the garage.</p>
+  </main>
+</body>
+</html>
