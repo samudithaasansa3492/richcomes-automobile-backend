@@ -127,6 +127,36 @@ class JwtTokenTest {
         assertThrows(IllegalStateException.class, () -> new JwtConfig().jwtSigningKeys(invalid));
     }
 
+    @Test
+    void loadsProtectedBase64PemPairWithoutFileSecrets() throws Exception {
+        var settingsWithoutFiles = new JwtSettings("issuer", "audience", null, null);
+        String pub = Base64.getEncoder().encodeToString(
+                pem("PUBLIC KEY", keys.getPublic().getEncoded()).getByteArray());
+        String priv = Base64.getEncoder().encodeToString(
+                pem("PRIVATE KEY", keys.getPrivate().getEncoded()).getByteArray());
+        var loaded = new JwtConfig().jwtSigningKeysForRuntime(settingsWithoutFiles, pub, priv);
+        assertArrayEquals(keys.getPublic().getEncoded(), loaded.getPublic().getEncoded());
+        assertArrayEquals(keys.getPrivate().getEncoded(), loaded.getPrivate().getEncoded());
+    }
+
+    @Test
+    void refusesIncompleteMalformedOrMismatchedRailwayKeys() throws Exception {
+        var missingFiles = new JwtSettings("issuer", "audience", null, null);
+        String pub = Base64.getEncoder().encodeToString(
+                pem("PUBLIC KEY", keys.getPublic().getEncoded()).getByteArray());
+        String priv = Base64.getEncoder().encodeToString(
+                pem("PRIVATE KEY", keys.getPrivate().getEncoded()).getByteArray());
+        var config = new JwtConfig();
+        assertThrows(IllegalStateException.class, () -> config.jwtSigningKeysForRuntime(missingFiles, "", priv));
+        assertThrows(IllegalStateException.class, () -> config.jwtSigningKeysForRuntime(missingFiles, pub, ""));
+        assertThrows(IllegalStateException.class, () -> config.jwtSigningKeysForRuntime(missingFiles, "", ""));
+        assertThrows(IllegalStateException.class, () -> config.jwtSigningKeysForRuntime(missingFiles, "NOT-BASE64!", priv));
+        String mismatched = Base64.getEncoder().encodeToString(
+                pem("PRIVATE KEY", newKeys().getPrivate().getEncoded()).getByteArray());
+        assertThrows(IllegalStateException.class,
+                () -> config.jwtSigningKeysForRuntime(missingFiles, pub, mismatched));
+    }
+
     private static ByteArrayResource pem(String type, byte[] encoded) {
         String text = "-----BEGIN " + type + "-----\n"
                 + Base64.getMimeEncoder(64, new byte[]{'\n'}).encodeToString(encoded)
