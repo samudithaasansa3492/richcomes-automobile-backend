@@ -25,7 +25,8 @@ public class AccountExceptionHandler {
             case EMPLOYEE_NOT_FOUND, ACCOUNT_NOT_FOUND, CUSTOMER_NOT_FOUND, CUSTOMER_ACCOUNT_NOT_FOUND -> 404;
             case SELF_MODIFICATION, TECHNICAL_ACCOUNT_PROTECTED, CUSTOMER_REGISTRATION_NOT_ALLOWED,
                  PERMISSION_DELEGATION_FORBIDDEN -> 403;
-            case OWNER_ROLE_NOT_CONFIGURED, CUSTOMER_ROLE_NOT_CONFIGURED -> 503;
+            case OWNER_ROLE_NOT_CONFIGURED, CUSTOMER_ROLE_NOT_CONFIGURED,
+                 CUSTOMER_ONBOARDING_UNAVAILABLE -> 503;
             default -> 409;
         };
         return response(status, exception.getCode().name(), exception.getMessage());
