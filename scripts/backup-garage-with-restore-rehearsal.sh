@@ -6,7 +6,7 @@ set +x
 umask 077
 
 die() { printf 'STOP: %s\n' "$*" >&2; exit 2; }
-for tool in psql pg_dump pg_restore docker sha256sum mktemp realpath; do
+for tool in psql pg_dump pg_restore docker sha256sum mktemp realpath python3; do
   command -v "$tool" >/dev/null || die "Required tool missing: $tool"
 done
 docker info >/dev/null 2>&1 || die "Docker daemon must be available"
