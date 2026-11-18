@@ -33,28 +33,81 @@ public class JwtConfig {
         return Clock.systemUTC();
     }
 
-    @Bean
-    public KeyPair jwtSigningKeys(JwtSettings settings) throws IOException, GeneralSecurityException {
-        try (var publicStream = settings.publicKey().getInputStream();
-             var privateStream = settings.privateKey().getInputStream()) {
-            RSAPublicKey publicKey = RsaKeyConverters.x509().convert(publicStream);
-            RSAPrivateKey privateKey = RsaKeyConverters.pkcs8().convert(privateStream);
-            if (publicKey == null || privateKey == null || publicKey.getModulus().bitLength() < 2048
-                    || !publicKey.getModulus().equals(privateKey.getModulus())) {
-                throw new IllegalStateException("JWT requires a matching RSA key pair of at least 2048 bits");
-            }
-            byte[] probe = "richcomes-jwt-key-pair-check".getBytes(StandardCharsets.US_ASCII);
-            Signature signature = Signature.getInstance("SHA256withRSA");
-            signature.initSign(privateKey);
-            signature.update(probe);
-            byte[] signed = signature.sign();
-            signature.initVerify(publicKey);
-            signature.update(probe);
-            if (!signature.verify(signed)) {
-                throw new IllegalStateException("JWT public and private keys do not form a valid pair");
-            }
-            return new KeyPair(publicKey, privateKey);
+    /**
+     * Railway-compatible key source: PEM strings, base64-wrapped and held only
+     * in protected runtime environment variables. No private signing key is
+     * copied into a Docker image, source file, output log or temporary file.
+     * Existing file-mounted PEM keys remain supported for other deployments.
+     */
+    @Bean("jwtSigningKeys")
+    public KeyPair jwtSigningKeysForRuntime(
+            JwtSettings settings,
+            @org.springframework.beans.factory.annotation.Value("${JWT_PUBLIC_KEY_PEM_BASE64:}")
+            String publicPemB64,
+            @org.springframework.beans.factory.annotation.Value("${JWT_PRIVATE_KEY_PEM_BASE64:}")
+            String privatePemB64) throws IOException, GeneralSecurityException {
+        boolean hasPublic = publicPemB64 != null && !publicPemB64.isBlank();
+        boolean hasPrivate = privatePemB64 != null && !privatePemB64.isBlank();
+        if (hasPublic != hasPrivate) {
+            throw new IllegalStateException("JWT signing keys must be configured as a complete pair");
         }
+        if (!hasPublic) {
+            return jwtSigningKeys(settings);
+        }
+        byte[] publicPem;
+        byte[] privatePem;
+        try {
+            publicPem = java.util.Base64.getDecoder().decode(publicPemB64.strip());
+            privatePem = java.util.Base64.getDecoder().decode(privatePemB64.strip());
+        } catch (IllegalArgumentException invalidBase64) {
+            throw new IllegalStateException("JWT signing keys are not valid base64 PEM data");
+        }
+        try {
+            if (publicPem.length == 0 || publicPem.length > 16384
+                    || privatePem.length == 0 || privatePem.length > 16384) {
+                throw new IllegalStateException("JWT signing keys exceed safe configuration size limits");
+            }
+            try (var pub = new java.io.ByteArrayInputStream(publicPem);
+                 var priv = new java.io.ByteArrayInputStream(privatePem)) {
+                return validateKeyPair(pub, priv);
+            }
+        } finally {
+            java.util.Arrays.fill(publicPem, (byte) 0);
+            java.util.Arrays.fill(privatePem, (byte) 0);
+        }
+    }
+
+    /** Existing file-resource path, including isolated test PEM keys. */
+    public KeyPair jwtSigningKeys(JwtSettings settings) throws IOException, GeneralSecurityException {
+        if (settings.publicKey() == null || settings.privateKey() == null) {
+            throw new IllegalStateException("JWT PEM key files have not been configured");
+        }
+        try (var pub = settings.publicKey().getInputStream();
+             var priv = settings.privateKey().getInputStream()) {
+            return validateKeyPair(pub, priv);
+        }
+    }
+
+    private KeyPair validateKeyPair(java.io.InputStream publicStream,
+                                   java.io.InputStream privateStream)
+            throws GeneralSecurityException {
+        RSAPublicKey publicKey = RsaKeyConverters.x509().convert(publicStream);
+        RSAPrivateKey privateKey = RsaKeyConverters.pkcs8().convert(privateStream);
+        if (publicKey == null || privateKey == null || publicKey.getModulus().bitLength() < 2048
+                || !publicKey.getModulus().equals(privateKey.getModulus())) {
+            throw new IllegalStateException("JWT requires a matching RSA key pair of at least 2048 bits");
+        }
+        byte[] probe = "richcomes-jwt-key-pair-check".getBytes(StandardCharsets.US_ASCII);
+        Signature signature = Signature.getInstance("SHA256withRSA");
+        signature.initSign(privateKey);
+        signature.update(probe);
+        byte[] signed = signature.sign();
+        signature.initVerify(publicKey);
+        signature.update(probe);
+        if (!signature.verify(signed)) {
+            throw new IllegalStateException("JWT public and private keys do not form a valid pair");
+        }
+        return new KeyPair(publicKey, privateKey);
     }
 
     @Bean
