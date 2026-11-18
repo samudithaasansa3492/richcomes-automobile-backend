@@ -1,5 +1,8 @@
 # Flyway safe startup — explicit migration authorization
 
+> **Live dev checkpoint (2026-11-18):** `richcomes-automobile-dev` remains at 14 successful Flyway versions; V15–V23 are not deployed. PRs #35–#37 are merged to `main`. `public.flyway_schema_history` has already been hardened transactionally as the owner: RLS ON, `anon`/`authenticated` SELECT denied, history still V14. Do not repeat this as an unverified future step. The organization's Supabase Free tier does not include scheduled automatic daily backups; there is no confirmed off-site restorable backup yet. Hold all remaining DDL until a backup is exported, independently restored/tested and change-window approval is recorded. Keep `FLYWAY_ENABLED=false` and `CUSTOMER_ONBOARDING_ENABLED=false` until full release readiness.
+>
+
 ## Default
 The Spring Boot API uses `spring.flyway.enabled=${FLYWAY_ENABLED:false}`.
 

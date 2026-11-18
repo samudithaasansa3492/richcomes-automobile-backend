@@ -1,4 +1,10 @@
-# PR #27 → #29 → #31: merge and release gates
+# PR #27 → #37: merge and release gates
+
+> **Verified 2026-11-18 release update (supersedes historical draft notes below):**
+> PRs #27, #29, #31, #35, #36 and #37 are merged into `main`. PR #37 passed isolated GitHub Actions CI (run 44240196385). Shared Supabase `richcomes-automobile-dev` remains at **V14**, with no `garage.user_accounts` table yet; V15–V23 **were not applied to the shared database**. On 2026-11-18 an authorized table-owner transaction revoked `PUBLIC`/`anon`/`authenticated` access and enabled RLS on `public.flyway_schema_history`. Post-change verification confirmed browser SELECT denied and 14 applied migrations preserved. The earlier statement below that history RLS is OFF is now *historical only*.
+>
+> **Deployment remains blocked by recoverability and operational prerequisites:** organization is on Supabase Free tier, without automatic scheduled daily backups; no verified off-site `pg_dump` backup plus restore drill has been established. App Flyway migration remains OFF by default and CUSTOMER onboarding remains OFF by default. Approval to proceed is recorded, but a verified restorable backup and approved physical proofing/frontend+SMTP process are still required before changing shared schema or serving customer logins. See [Issue #34](https://github.com/samudithaasansa3492/richcomes-automobile-backend/issues/34) and [Supabase backups](https://supabase.com/docs/guides/platform/backups).
+
 
 > **Integration update (2026-11-18):** PR #27, #29 and #31 are merged into
 > `main` (commit `731c89135ab20b635701f4ce9333a339507fd7fe`).
