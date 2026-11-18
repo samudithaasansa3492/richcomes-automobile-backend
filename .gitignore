@@ -40,3 +40,10 @@ client.private.env.json
 .env.*
 !.env.example
 !**/.env.example
+
+# Database backups must NEVER be committed (they can contain customer data)
+*.dump
+*.backup
+**/richcomes-app-backup-*/
+backups/
+db-backups/
