@@ -34,6 +34,10 @@ public class CustomerAccountService {
     private final SecurityAuditRepository audit;
     private final RecoveryService recovery;
     private final SecureRandom random = new SecureRandom();
+    // Independent rollout gate: staff recovery SMTP being enabled does not
+    // authorize the real-world customer identity proofing process.
+    @org.springframework.beans.factory.annotation.Value("${CUSTOMER_ONBOARDING_ENABLED:false}")
+    private boolean onboardingEnabled;
 
     public CustomerAccountService(UserAccountRepository accounts, CustomerRepository customers,
             RoleRepository roles, PasswordEncoder passwords, SecurityAuditRepository audit,
@@ -48,6 +52,7 @@ public class CustomerAccountService {
 
     public CustomerAccountResponse register(CustomerAccountCreateRequest request, AccountPrincipal actor) {
         requireRegistrationActor(actor);
+        requireOnboardingEnabled();
         if (request == null || request.customerId() == null || request.customerId() <= 0
                 || request.username() == null || request.username().isBlank()) {
             throw failure(INVALID_REQUEST, "Invalid customer enrollment request");
@@ -96,6 +101,7 @@ public class CustomerAccountService {
      */
     public void verifyAndInvite(Long accountId, String caseReference, AccountPrincipal actor) {
         requireActivationActor(actor);
+        requireOnboardingEnabled();
         if (accountId == null || accountId <= 0 || caseReference == null
                 || !caseReference.matches("[A-Z0-9][A-Z0-9_-]{7,63}")) {
             throw failure(INVALID_REQUEST, "Valid verification case reference required");
@@ -125,6 +131,7 @@ public class CustomerAccountService {
         // higher-trust step reserved for OWNER after out-of-band identity checks.
         // This is intentionally enforced here as well as in the HTTP filter.
         requireActivationActor(actor);
+        requireOnboardingEnabled();
         if (accountId == null || accountId <= 0) {
             throw failure(INVALID_REQUEST, "Valid account ID required");
         }
@@ -151,6 +158,13 @@ public class CustomerAccountService {
                     "CUSTOMER_ACCOUNT_ACTIVATED", Instant.now()));
         }
         return response(account);
+    }
+
+    private void requireOnboardingEnabled() {
+        if (!onboardingEnabled) {
+            throw failure(CUSTOMER_ONBOARDING_UNAVAILABLE,
+                    "Customer onboarding is unavailable until verified rollout approval");
+        }
     }
 
     private void requireActivationActor(AccountPrincipal actor) {
