@@ -29,6 +29,6 @@ class GarageApplicationTests {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("window.history.replaceState")));
         mvc.perform(get("/account-setup.css")).andExpect(status().isOk());
-        mvc.perform(get("/other-secret-file.txt")).andExpect(status().isForbidden());
+        mvc.perform(get("/other-secret-file.txt")).andExpect(status().isUnauthorized());
     }
 }
