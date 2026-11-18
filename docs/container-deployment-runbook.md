@@ -1,0 +1,49 @@
+# Richcomes Spring Boot release — protected container deployment
+
+**Status:** container and readiness code is integrated/tested in GitHub, but the *actual hosted service is not yet deployed*. The connected shared Supabase project is a Free-tier dev project at V14; this API release requires V23. No actual off-site recovery backup, approved external SMTP sender, hosted HTTPS origin, or private RSA key mount has been verified yet.
+
+## Target architecture
+
+- Deploy this repository as a **Java 21 Spring Boot** service with the root [Dockerfile](../Dockerfile). The build uses a JDK image, installs no user secrets, creates a repackaged executable JAR and runs on a non-root JRE user.
+- Expose the container HTTP port supplied by the host's `PORT` variable (default 8080). Let a trusted HTTPS reverse proxy / application host terminate TLS. Never publicly expose PostgreSQL or JDBC.
+- Supply **all secrets at runtime via protected host configuration or mounted secret files**, never source, public build logs, copy/pasted commands, or image build arguments.
+- Configure hosting health-check path to `GET /actuator/health/readiness`. It requires a usable database and returns only UP/DOWN, no component details. `GET /actuator/health/liveness` is an independent minimal process-status check. All other Actuator endpoints remain inaccessible without explicit authorization and are not web-exposed.
+- A startup guard refuses the service when required V23 customer-proof columns and single-use INITIAL_PASSWORD challenge constraint are missing, **even if the underlying V14 database connection is healthy**. This prevents inadvertently serving a V23 API on a V14 database.
+- For a hosting provider with an existing Railway account, Railway automatically detects the root Dockerfile and uses its own PORT, and can check `/actuator/health/readiness`. See the official Railway [Dockerfile guide](https://docs.railway.com/builds/dockerfiles) and [health-check guide](https://docs.railway.com/deployments/healthchecks). No Railway account/service has been created here.
+
+## Mandatory prerequisite before real application traffic
+
+1. **DB recoverability:** select exact target/project, freeze writes, export full appropriate Supabase-compatible backup (roles, schema, data, app objects and external storage if any), encrypt and store off-site, retrieve a separate copy and actually restore in a trusted isolated environment. Record operator evidence and a rollback/forward-fix plan. CI synthetic restores are *not* proof of the shared DB backup. Follow [database backup runbook](shared-supabase-backup-restore.md) and official Supabase docs.
+2. **DB migration:** verify all existing applied V1–V14 scripts/checksums and a tested V15–V23 upgrade, then run migrations with an independently controlled *one-time migration operator*. `FLYWAY_ENABLED=false` must remain the default in hosted application instances. Verify new account and security tables, protected grants/RLS, OWNER/CASHIER/CUSTOMER role separation, post-migration health, and Flyway history. Do not make a normal API deployment run Flyway implicitly.
+3. **Keys:** generate a unique RS256 RSA key pair (2048 bits minimum) using an approved key process. Deliver the private PKCS#8 key and public X.509 key securely through host-mounted runtime files. Set `JWT_PRIVATE_KEY_LOCATION=file:/run/secrets/jwt-private.pem` and `JWT_PUBLIC_KEY_LOCATION=file:/run/secrets/jwt-public.pem`. Private file must be readable by UID 10001 only where possible; never add PEMs to Git, Docker image, chat or CI artifacts. Set stable `JWT_ISSUER` and `JWT_AUDIENCE`, with reviewed session/password reset policy. JWT signing keys are external assets, not provisioned by this code.
+4. **Database connection:** configure `DB_URL` (TLS with correct certificate/hostname), `DB_USERNAME` and `DB_PASSWORD` as host secrets for a dedicated application DB role. Prefer least-privilege role rather than the operator/superuser account. Ensure privilege to the `garage` schema, tables and required sequences, and *no* browser/public roles on sensitive tables. Test read/write under the exact dedicated app role on a disposable database before granting it access to real customer data. Keep the migration operator separate.
+5. **Service:** create an access-controlled hosting project/service from the GitHub `main` commit; disable any provider preset auto-migration/build-time database connection. Validate image build, non-root runtime and startup guard in a disposable environment. Only after V23 schema is confirmed, deploy service with `FLYWAY_ENABLED=false`, `CUSTOMER_ONBOARDING_ENABLED=false`, and `APP_RECOVERY_ENABLED=false` to an HTTPS URL. Confirm API health and no data leaks to logs.
+6. **Mail + customer ownership:** verify approved sender domain and TLS SMTP credentials; configure `APP_RECOVERY_FROM`, `APP_RECOVERY_PAGE=https://<host>/account-setup.html`, `APP_RECOVERY_ENABLED=true`, `SPRING_MAIL_HOST`, `SPRING_MAIL_PORT`, `SPRING_MAIL_USERNAME`, `SPRING_MAIL_PASSWORD`, SMTP STARTTLS required. Test a *synthetic* token delivery to an authorized test mailbox first. Never send production credentials by plaintext email.
+7. **Identity proofing:** a real garage OWNER and privacy custodian must independently accept the in-person ID-verification SOP, case evidence custody/retention, email ownership process, incident response, legitimate test cases and operator training. A pasted case reference alone is not proof. Only then can a named operator explicitly enable `CUSTOMER_ONBOARDING_ENABLED=true` during controlled rollout and test a single authorized customer identity end-to-end.
+
+## Pre-deployment secrets/config checklist
+
+See [environment example](../.env.example) for **names only**. In particular:
+
+| Config | Requirement |
+| --- | --- |
+| `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | real target; restricted user; TLS; configured only after migrations/restore test |
+| `JWT_ISSUER`, `JWT_AUDIENCE` | issuer/audience matching signed JWT claims; no hardcoded development values |
+| `JWT_PUBLIC_KEY_LOCATION`, `JWT_PRIVATE_KEY_LOCATION` | runtime mounted files; never committed secrets |
+| `FLYWAY_ENABLED` | `false` for normal service; separate one-time migration operator |
+| `CUSTOMER_ONBOARDING_ENABLED` | `false` until real proofing/email/live validation approved |
+| `APP_RECOVERY_ENABLED` | `false` until TLS SMTP and approved same-origin HTTPS tested |
+| `PORT` | provider-defined; default 8080 |
+
+## Release verification
+
+- [ ] CI exact-commit selected regression suite + Spring signed-JWT PostgreSQL + Flyway fresh/upgrade tests pass.
+- [ ] Docker image builds with Java 21 and contains no `.env`, private RSA key or backup dump files.
+- [ ] On isolated **V14** source the startup guard refuses serving API until manual migration; no source data modified.
+- [ ] On isolated **V23** source the app boots, liveness/readiness probes return 200, and readiness returns unavailable when the DB connection fails.
+- [ ] API anonymous probes expose no headers with credentials, no environment variables or detailed component health; `/actuator/env` and `/actuator/health` are denied.
+- [ ] Exact deployed host/container image commit, health checks, DNS/TLS certificate, gateway rate limits, reverse proxy headers and security logs reviewed.
+- [ ] No customer onboarding until verified mailbox + physical ID procedure + guardian/operator audit approval.
+- [ ] Record backup archive retrieval, restore evidence, migration change window, reviewer and deployment rollback instructions in [Issue #34](https://github.com/samudithaasansa3492/richcomes-automobile-backend/issues/34).
+
+**Note:** This is a deployment *package and runbook*, not proof that any host, domain, SMTP provider or off-site backup has been connected. If a provider is not connected to ChatGPT, connecting it requires the user's action. No paid infrastructure is provisioned without a provider-specific confirmed cost.

@@ -85,3 +85,9 @@ jobs:
           set -euo pipefail
           env -i HOME="$HOME" USER="runner" PATH="$PATH" JAVA_HOME="$JAVA_HOME" \
             bash scripts/validate-flyway-isolated.sh
+
+      - name: Build deployable non-root Java 21 container (no secrets)
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build --tag richcomes-backend:ci .
