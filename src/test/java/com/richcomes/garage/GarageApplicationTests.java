@@ -19,6 +19,22 @@ class GarageApplicationTests {
     void contextLoads() {}
 
     @Test
+    void onlyNonSensitiveHealthProbesArePublic() throws Exception {
+        var mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
+        mvc.perform(get("/actuator/health/liveness"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"))
+                .andExpect(jsonPath("$.components").doesNotExist())
+                .andExpect(jsonPath("$.details").doesNotExist());
+        mvc.perform(get("/actuator/health/readiness"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("UP"))
+                .andExpect(jsonPath("$.components").doesNotExist());
+        mvc.perform(get("/actuator/env")).andExpect(status().isUnauthorized());
+        mvc.perform(get("/actuator/health")).andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void recoveryPageAndAssetsAreAvailableWithoutAuthentication() throws Exception {
         var mvc = MockMvcBuilders.webAppContextSetup(context).apply(springSecurity()).build();
         mvc.perform(get("/account-setup.html"))
