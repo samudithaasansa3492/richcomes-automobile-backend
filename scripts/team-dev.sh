@@ -60,13 +60,29 @@ case "$ACTION" in
     rm -f "$RICHCOMES_TEAM_STATE/private.pem" "$RICHCOMES_TEAM_STATE/public.pem" "$RICHCOMES_TEAM_STATE/password"
     echo "Disposable team database stopped and temporary secrets destroyed."
     ;;
+  verify)
+    require curl
+    [[ -r "$RICHCOMES_TEAM_STATE/password" ]] || { echo "STOP: no local fixture" >&2; exit 2; }
+    export RICHCOMES_TEAM_PASSWORD="$(cat "$RICHCOMES_TEAM_STATE/password")"
+    response="$(curl -fsS --max-time 8 "http://127.0.0.1:$RICHCOMES_TEAM_PORT/actuator/health/readiness")" ||
+      { echo "FAIL: backend readiness not UP" >&2; exit 1; }
+    [[ "$response" == *'"status":"UP"'* ]] || { echo "FAIL: unexpected readiness response" >&2; exit 1; }
+    count="$(docker compose --project-name "$PROJECT" -f "$COMPOSE" exec -T database \
+      psql -U postgres -d richcomes_team -Atc \
+      "SELECT COUNT(*) FROM public.flyway_schema_history WHERE success" 2>/dev/null)"
+    [[ "$count" == 23 ]] || { echo "FAIL: expected 23 disposable Flyway migrations, got $count" >&2; exit 1; }
+    # Neither database ports nor customer data are exposed to the host.
+    [[ -z "$(docker port "$(docker compose --project-name "$PROJECT" -f "$COMPOSE" ps -q database)" 5432/tcp 2>/dev/null)" ]] ||
+      { echo "FAIL: local PostgreSQL unexpectedly published" >&2; exit 1; }
+    echo "PASS: disposable team backend readiness UP; migrations V1-V23; DB port private"
+    ;;
   status)
     [[ -r "$RICHCOMES_TEAM_STATE/password" ]] || { echo "STOP: no local fixture" >&2; exit 2; }
     export RICHCOMES_TEAM_PASSWORD="$(cat "$RICHCOMES_TEAM_STATE/password")"
     docker compose --project-name "$PROJECT" -f "$COMPOSE" ps
     ;;
   *)
-    echo "Usage: bash scripts/team-dev.sh [up|status|down]" >&2
+    echo "Usage: bash scripts/team-dev.sh [up|verify|status|down]" >&2
     exit 2
     ;;
 esac
