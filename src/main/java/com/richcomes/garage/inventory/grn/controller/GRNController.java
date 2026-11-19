@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -50,6 +51,28 @@ public class GRNController {
         return ResponseEntity.ok(grnService.getGRNById(id));
     }
 
-    // Stock-changing confirm/cancel endpoints
-    // will be added after authorization review.
+    // CONFIRM DRAFT GRN
+    // Stock increases only when GRNService confirms.
+    @PreAuthorize("isAuthenticated()")
+    @PostMapping("/{id}/confirm")
+    public ResponseEntity<GRNResponse> confirmGRN(
+            @PathVariable Long id) {
+
+        return ResponseEntity.ok(
+                grnService.confirmGRN(id)
+        );
+    }
+
+    // CANCEL DRAFT GRN
+    // Only DRAFT GRNs can be cancelled.
+    // Confirmed GRNs cannot be cancelled using this endpoint.
+    @PreAuthorize("isAuthenticated()")
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<GRNResponse> cancelGRN(
+            @PathVariable Long id) {
+
+        return ResponseEntity.ok(
+                grnService.cancelGRN(id)
+        );
+    }
 }
