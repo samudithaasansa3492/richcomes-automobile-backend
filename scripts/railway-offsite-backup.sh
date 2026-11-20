@@ -52,6 +52,11 @@ if [[ "$action" == upload ]]; then
     die "Source project is not the approved Supabase project"
   grep -qx 'FLYWAY_HISTORY=14:14' "$src/manifest.txt" ||
     die "Backup snapshot is not pre-V15 V14"
+  grep -qx 'BACKUP_FORMAT_VERSION=2' "$src/manifest.txt" ||
+    die "Backup snapshot lacks the source row-count manifest; create a fresh export"
+  source_counts="$(sed -n 's/^APP_ROW_COUNTS=//p' "$src/manifest.txt")"
+  [[ "$source_counts" =~ ^[0-9]+(:[0-9]+){6}$ ]] ||
+    die "Backup snapshot row-count manifest invalid or missing"
   grep -qx 'RESTORE_TEST=isolated_postgres17_pass' "$src/manifest.txt" ||
     die "Local restore rehearsal not confirmed"
   (cd "$src" && sha256sum --check --status SHA256SUMS) ||
