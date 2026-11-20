@@ -7,7 +7,6 @@ public class ServiceJobDTO {
     private String jobNo;
     private Long vehicleId;
     private Long customerId;
-    private Long branchId;
     private Long assignedEmployeeId;
     private String status;
     private LocalDateTime jobDate;
@@ -27,8 +26,6 @@ public class ServiceJobDTO {
     public void setVehicleId(Long vehicleId) { this.vehicleId = vehicleId; }
     public Long getCustomerId() { return customerId; }
     public void setCustomerId(Long customerId) { this.customerId = customerId; }
-    public Long getBranchId() { return branchId; }
-    public void setBranchId(Long branchId) { this.branchId = branchId; }
     public Long getAssignedEmployeeId() { return assignedEmployeeId; }
     public void setAssignedEmployeeId(Long assignedEmployeeId) { this.assignedEmployeeId = assignedEmployeeId; }
     public String getStatus() { return status; }
