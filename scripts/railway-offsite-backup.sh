@@ -111,6 +111,11 @@ grep -qx 'PROJECT_REF=iehuxwbrwfysgujaqagj' "$tmp/recovered/manifest.txt" ||
   die "Recovered project does not match"
 grep -qx 'FLYWAY_HISTORY=14:14' "$tmp/recovered/manifest.txt" ||
   die "Recovered history version does not match"
+grep -qx 'BACKUP_FORMAT_VERSION=2' "$tmp/recovered/manifest.txt" ||
+  die "Recovered archive lacks source row-count verification"
+source_counts="$(sed -n 's/^APP_ROW_COUNTS=//p' "$tmp/recovered/manifest.txt")"
+[[ "$source_counts" =~ ^[0-9]+(:[0-9]+){6}$ ]] ||
+  die "Recovered row-count manifest missing or malformed"
 pg_restore --list "$tmp/recovered/garage.dump" >/dev/null ||
   die "Garage database archive corrupted"
 pg_restore --list "$tmp/recovered/flyway-history.dump" >/dev/null ||
