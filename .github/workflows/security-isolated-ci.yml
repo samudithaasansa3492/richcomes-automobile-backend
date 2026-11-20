@@ -53,6 +53,8 @@ jobs:
           set -euo pipefail
           bash -n scripts/backup-garage-with-restore-rehearsal.sh
           bash -n scripts/railway-offsite-backup.sh
+          bash -n scripts/test-offsite-backup-guards.sh
+          bash scripts/test-offsite-backup-guards.sh
           bash -n scripts/check-shared-flyway-history-readonly.sh
           python3 scripts/test-flyway-history-preflight.py
           bash -n scripts/validate-flyway-isolated.sh
