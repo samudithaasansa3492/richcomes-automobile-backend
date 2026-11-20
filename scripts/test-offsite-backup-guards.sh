@@ -43,15 +43,17 @@ reject() {
   }
   echo "PASS: $reason rejected before external service access"
 }
-write_manifest APP_ROW_COUNTS=0:0:0:0:0:0:0
+write_manifest APP_ROW_COUNTS=0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0
 reject 'missing backup format version'
-write_manifest BACKUP_FORMAT_VERSION=2
+write_manifest BACKUP_FORMAT_VERSION=3
 reject 'missing table-count baseline'
-write_manifest BACKUP_FORMAT_VERSION=2 APP_ROW_COUNTS=0:0:0:0:0:0
+write_manifest BACKUP_FORMAT_VERSION=2 APP_ROW_COUNTS=0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0
+reject 'obsolete seven-table backup format'
+write_manifest BACKUP_FORMAT_VERSION=3 APP_ROW_COUNTS=0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0
 reject 'too few application counts'
-write_manifest BACKUP_FORMAT_VERSION=2 APP_ROW_COUNTS=0:0:0:0:0:0:garbled
+write_manifest BACKUP_FORMAT_VERSION=3 APP_ROW_COUNTS=0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:garbled
 reject 'nonnumeric application count'
-write_manifest BACKUP_FORMAT_VERSION=2 APP_ROW_COUNTS=0:0:0:0:0:0:0
+write_manifest BACKUP_FORMAT_VERSION=3 APP_ROW_COUNTS=0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0:0
 # Invalid source checksums must likewise fail prior to attempting encryption.
 printf 'modified original\n' > "$tmp/snapshot/garage.dump"
 reject 'modified source archive SHA-256'

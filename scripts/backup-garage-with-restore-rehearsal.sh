@@ -100,16 +100,17 @@ docker exec "$container" pg_restore -U postgres -d postgres \
 after="$(docker exec "$container" psql -X -qAt -v ON_ERROR_STOP=1 \
   -U postgres -d postgres -c "$preflight_sql")"
 [[ "$before" == "$after" ]] || die "Restored Flyway history differs from source"
-counts_sql="SELECT (SELECT count(*) FROM garage.employees)::text || ':' ||
- (SELECT count(*) FROM garage.customers)::text || ':' ||
- (SELECT count(*) FROM garage.vehicles)::text || ':' ||
- (SELECT count(*) FROM garage.stock_items)::text || ':' ||
- (SELECT count(*) FROM garage.grns)::text || ':' ||
- (SELECT count(*) FROM garage.service_jobs)::text || ':' ||
- (SELECT count(*) FROM garage.sales_invoices)::text"
-original_counts="$(psql -X -qAt -v ON_ERROR_STOP=1 -c "$counts_sql")"
+# All 21 V14 garage tables, including suppliers, GRN items and stock categories,
+# are counted exactly. A newly added table or missing table stops the backup.
+count_file="$repo/scripts/garage-v14-exact-counts.sql"
+source_table_total="$(psql -X -qAt -v ON_ERROR_STOP=1 \
+  -c "SELECT count(*) FROM information_schema.tables WHERE table_schema='garage' AND table_type='BASE TABLE'")"
+[[ "$source_table_total" == "21" ]] || die "Unexpected source garage table count: $source_table_total"
+original_counts="$(psql -X -qAt -v ON_ERROR_STOP=1 -f "$count_file")"
+[[ "$original_counts" =~ ^[0-9]+(:[0-9]+){20}$ ]] || die "Source table counts unavailable"
+docker cp "$count_file" "$container:/tmp/garage-v14-exact-counts.sql"
 restored_counts="$(docker exec "$container" psql -X -qAt -v ON_ERROR_STOP=1 \
-  -U postgres -d postgres -c "$counts_sql")"
+  -U postgres -d postgres -f /tmp/garage-v14-exact-counts.sql)"
 [[ "$original_counts" == "$restored_counts" ]] ||
   die "Restored key table counts differ; check active source writers"
 [[ "$(psql -X -qAt -v ON_ERROR_STOP=1 -c "$preflight_sql")" == "$before" ]] ||
@@ -124,7 +125,7 @@ printf 'Source schema/Flyway restoration PASS on isolated PostgreSQL 17.\n'
 printf '%s\n' \
   "PROJECT_REF=$PROJECT_REF" \
   "FLYWAY_HISTORY=$before" \
-  "BACKUP_FORMAT_VERSION=2" \
+  "BACKUP_FORMAT_VERSION=3" \
   "APP_ROW_COUNTS=$original_counts" \
   "SCOPE=garage schema + public.flyway_schema_history only" \
   "RESTORE_TEST=isolated_postgres17_pass" \

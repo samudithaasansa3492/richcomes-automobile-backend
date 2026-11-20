@@ -53,7 +53,7 @@ bash scripts/railway-offsite-backup.sh recover \
   '<recorded-BACKUP_OBJECT_KEY>' '<recorded-BACKUP_CIPHERTEXT_SHA256>'
 ```
 
-The script retrieves the ciphertext, validates SHA-256, decrypts using the offline-custodied identity, validates the exact member list and plaintext checksums, then restores both dumps into a disposable Postgres **17** instance with `--network none`, no published database ports and `tmpfs` storage. It verifies the restored Flyway history is `14:14` **and compares all seven canonical application table counts with the original v2 source manifest** before declaring success; it destroys temporary data on exit. Record the actual successful output, time, signed operator identity and scope; **do not close the release gate** until the business owner/DBA has approved the backup completeness and an additional full-platform recovery plan.
+The script retrieves the ciphertext, validates SHA-256, decrypts using the offline-custodied identity, validates the exact member list and plaintext checksums, then restores both dumps into a disposable Postgres **17** instance with `--network none`, no published database ports and `tmpfs` storage. It verifies the restored Flyway history is `14:14` **and compares all 21 V14 application table counts with the original v3 source manifest** before declaring success; it destroys temporary data on exit. Record the actual successful output, time, signed operator identity and scope; **do not close the release gate** until the business owner/DBA has approved the backup completeness and an additional full-platform recovery plan.
 
 ## Protecting data and credentials
 
