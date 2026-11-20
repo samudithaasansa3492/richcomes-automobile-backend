@@ -228,6 +228,20 @@ verify_isolated_backup_roundtrip() {
   test "$original" = "$restored" || {
     echo 'FAIL: isolated garage V14 backup/restore row counts differ'; exit 1;
   }
+  # Confirm all 21 canonical V14 tables survive the backup/restore, not
+  # merely the 3 legacy spot-check tables.
+  docker cp scripts/garage-v14-exact-counts.sql "$CONTAINER:/tmp/garage-v14-exact-counts.sql"
+  local expected_counts actual_counts
+  expected_counts="$(docker exec "$CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 \
+    -U postgres -d richcomes_upgrade -f /tmp/garage-v14-exact-counts.sql)"
+  actual_counts="$(docker exec "$CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 \
+    -U postgres -d richcomes_restore -f /tmp/garage-v14-exact-counts.sql)"
+  [[ "$expected_counts" =~ ^[0-9]+(:[0-9]+){20}$ ]] || {
+    echo 'FAIL: V14 source table-count fixture did not return 21 values'; exit 1;
+  }
+  test "$expected_counts" = "$actual_counts" || {
+    echo 'FAIL: recovered V14 data differs across the 21 application tables'; exit 1;
+  }
   echo 'PASS: custom-format V14 app schema/history successfully restored on throwaway PostgreSQL'
 }
 
