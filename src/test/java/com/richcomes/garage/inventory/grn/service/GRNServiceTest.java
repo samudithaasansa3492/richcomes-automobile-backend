@@ -1,8 +1,9 @@
-
 package com.richcomes.garage.inventory.grn.service;
 
 import com.richcomes.garage.inventory.grn.dto.request.GRNItemRequest;
 import com.richcomes.garage.inventory.grn.dto.request.GRNRequest;
+import com.richcomes.garage.inventory.grn.dto.request.GRNStoreAllocationRequest;
+import com.richcomes.garage.inventory.grn.entity.GRNItemAllocation;
 import com.richcomes.garage.inventory.grn.entity.GRN;
 import com.richcomes.garage.inventory.grn.entity.GRNItem;
 import com.richcomes.garage.inventory.grn.enums.GRNStatus;
@@ -14,6 +15,10 @@ import com.richcomes.garage.inventory.stockmovement.enums.StockTransactionType;
 import com.richcomes.garage.inventory.stockmovement.repository.StockTransactionRepository;
 import com.richcomes.garage.inventory.supplier.entity.Supplier;
 import com.richcomes.garage.inventory.supplier.repository.SupplierRepository;
+import com.richcomes.garage.inventory.store.entity.StoreLocation;
+import com.richcomes.garage.inventory.store.entity.StoreStockBalance;
+import com.richcomes.garage.inventory.store.repository.StoreLocationRepository;
+import com.richcomes.garage.inventory.store.repository.StoreStockBalanceRepository;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -49,11 +54,20 @@ class GRNServiceTest {
     @Mock
     private StockTransactionRepository transactionRepository;
 
+    @Mock
+    private StoreLocationRepository storeLocationRepository;
+
+    @Mock
+    private StoreStockBalanceRepository storeStockBalanceRepository;
+
     @InjectMocks
     private GRNService grnService;
 
     private GRN grn;
     private StockItem stockItem;
+    private StoreLocation store1;
+    private StoreLocation store2;
+    private StoreLocation store3;
 
     @BeforeEach
     void setUp() {
@@ -68,6 +82,11 @@ class GRNServiceTest {
         stockItem.setItemName("Engine Oil 1L");
         stockItem.setCurrentQuantity(BigDecimal.ZERO);
         stockItem.setActive(true);
+        stockItem.setUnit("PCS");
+
+        store1 = store(1L, "STORE_01");
+        store2 = store(2L, "STORE_02");
+        store3 = store(3L, "STORE_03");
 
         GRNItem grnItem = new GRNItem();
         grnItem.setStockItem(stockItem);
@@ -79,6 +98,9 @@ class GRNServiceTest {
         grn.setSupplier(supplier);
         grn.setStatus(GRNStatus.DRAFT);
         grn.addItem(grnItem);
+        grnItem.addAllocation(allocation(store1, "10.000"));
+        grnItem.addAllocation(allocation(store2, "6.000"));
+        grnItem.addAllocation(allocation(store3, "4.000"));
     }
 
     @Test
@@ -89,6 +111,8 @@ class GRNServiceTest {
 
         when(stockItemRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(stockItem));
+
+        stubThreeStoreBalances();
 
         when(grnRepository.saveAndFlush(any(GRN.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -321,6 +345,7 @@ class GRNServiceTest {
         firstItem.setStockItemId(1L);
         firstItem.setReceivedQuantity(new BigDecimal("10.000"));
         firstItem.setUnitCost(new BigDecimal("1500.00"));
+        firstItem.setAllocations(List.of(allocationRequest(1L, "10.000")));
 
         GRNItemRequest secondItem = new GRNItemRequest();
         secondItem.setStockItemId(1L);
@@ -334,6 +359,8 @@ class GRNServiceTest {
 
         when(stockItemRepository.findById(1L))
                 .thenReturn(Optional.of(stockItem));
+        when(storeLocationRepository.findById(1L))
+                .thenReturn(Optional.of(store1));
 
         ResponseStatusException exception = assertThrows(
                 ResponseStatusException.class,
@@ -416,12 +443,18 @@ class GRNServiceTest {
 
         GRNItem grnItem = grn.getItems().get(0);
         grnItem.setReceivedQuantity(new BigDecimal("1.250"));
+        grnItem.getAllocations().clear();
+        grnItem.addAllocation(allocation(store1, "0.500"));
+        grnItem.addAllocation(allocation(store2, "0.500"));
+        grnItem.addAllocation(allocation(store3, "0.250"));
 
         when(grnRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(grn));
 
         when(stockItemRepository.findByIdForUpdate(1L))
                 .thenReturn(Optional.of(stockItem));
+
+        stubThreeStoreBalances();
 
         when(grnRepository.saveAndFlush(any(GRN.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
@@ -461,4 +494,192 @@ class GRNServiceTest {
 
         assertEquals(GRNStatus.CONFIRMED, grn.getStatus());
     }
+
+    // Test helpers: mock entities do not touch a database.
+    private StoreLocation store(Long id, String code) {
+        StoreLocation location = new StoreLocation();
+        location.setStoreCode(code);
+        location.setStoreName(code);
+        location.setActive(true);
+        // JPA ID has no setter; use Spring's test-only reflection helper.
+        org.springframework.test.util.ReflectionTestUtils.setField(location, "id", id);
+        return location;
+    }
+
+    private GRNItemAllocation allocation(StoreLocation location, String quantity) {
+        GRNItemAllocation result = new GRNItemAllocation();
+        result.setStoreLocation(location);
+        result.setAllocatedQuantity(new BigDecimal(quantity));
+        return result;
+    }
+
+    private GRNStoreAllocationRequest allocationRequest(Long storeId, String quantity) {
+        GRNStoreAllocationRequest result = new GRNStoreAllocationRequest();
+        result.setStoreLocationId(storeId);
+        result.setAllocatedQuantity(new BigDecimal(quantity));
+        return result;
+    }
+
+    private GRNRequest draftRequest(BigDecimal received, GRNStoreAllocationRequest... allocations) {
+        GRNItemRequest item = new GRNItemRequest();
+        item.setStockItemId(1L);
+        item.setReceivedQuantity(received);
+        item.setUnitCost(new BigDecimal("1500.00"));
+        item.setAllocations(List.of(allocations));
+        GRNRequest request = new GRNRequest();
+        request.setSupplierId(1L);
+        request.setItems(List.of(item));
+        return request;
+    }
+
+    private void stubDraftDependencies() {
+        when(supplierRepository.findById(1L)).thenReturn(Optional.of(grn.getSupplier()));
+        when(stockItemRepository.findById(1L)).thenReturn(Optional.of(stockItem));
+    }
+
+    private void stubThreeStoreBalances() {
+        for (StoreLocation location : List.of(store1, store2, store3)) {
+            Long id = location.getId();
+            when(storeLocationRepository.findById(id)).thenReturn(Optional.of(location));
+            // No existing store balance: service must create one.
+            when(storeStockBalanceRepository.findForUpdate(id, 1L))
+                    .thenReturn(Optional.empty());
+        }
+        when(storeStockBalanceRepository.saveAndFlush(any(StoreStockBalance.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+    }
+
+    @Test
+    void createDraftWithThreeStoreAllocations_ShouldPersistSplitWithoutStockChange() {
+        GRNRequest request = draftRequest(new BigDecimal("20.000"),
+                allocationRequest(1L, "10.000"),
+                allocationRequest(2L, "6.000"),
+                allocationRequest(3L, "4.000"));
+        stubDraftDependencies();
+        when(storeLocationRepository.findById(1L)).thenReturn(Optional.of(store1));
+        when(storeLocationRepository.findById(2L)).thenReturn(Optional.of(store2));
+        when(storeLocationRepository.findById(3L)).thenReturn(Optional.of(store3));
+        when(grnRepository.saveAndFlush(any(GRN.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        var response = grnService.createDraft(request);
+
+        assertEquals(3, response.getItems().get(0).getAllocations().size());
+        assertEquals(0, new BigDecimal("20.000").compareTo(
+                response.getItems().get(0).getAllocations().stream()
+                        .map(a -> a.allocatedQuantity())
+                        .reduce(BigDecimal.ZERO, BigDecimal::add)));
+        assertEquals(0, BigDecimal.ZERO.compareTo(stockItem.getCurrentQuantity()));
+        verifyNoInteractions(transactionRepository, storeStockBalanceRepository);
+    }
+
+    @Test
+    void createDraftWithAllocationMismatch_ShouldReject() {
+        GRNRequest request = draftRequest(new BigDecimal("20.000"),
+                allocationRequest(1L, "10.000"));
+        stubDraftDependencies();
+        when(storeLocationRepository.findById(1L)).thenReturn(Optional.of(store1));
+
+        assertEquals(400, assertThrows(ResponseStatusException.class,
+                () -> grnService.createDraft(request)).getStatusCode().value());
+        verify(grnRepository, never()).saveAndFlush(any(GRN.class));
+    }
+
+    @Test
+    void createDraftWithDuplicateStore_ShouldReject() {
+        GRNRequest request = draftRequest(new BigDecimal("20.000"),
+                allocationRequest(1L, "10.000"), allocationRequest(1L, "10.000"));
+        stubDraftDependencies();
+        when(storeLocationRepository.findById(1L)).thenReturn(Optional.of(store1));
+
+        assertEquals(400, assertThrows(ResponseStatusException.class,
+                () -> grnService.createDraft(request)).getStatusCode().value());
+        verify(grnRepository, never()).saveAndFlush(any(GRN.class));
+    }
+
+    @Test
+    void createDraftWithoutAllocations_ShouldReject() {
+        GRNRequest request = draftRequest(new BigDecimal("20.000"));
+        stubDraftDependencies();
+        assertEquals(400, assertThrows(ResponseStatusException.class,
+                () -> grnService.createDraft(request)).getStatusCode().value());
+    }
+
+    @Test
+    void createDraftForInactiveStore_ShouldReject() {
+        GRNRequest request = draftRequest(new BigDecimal("20.000"),
+                allocationRequest(1L, "20.000"));
+        store1.setActive(false);
+        stubDraftDependencies();
+        when(storeLocationRepository.findById(1L)).thenReturn(Optional.of(store1));
+        assertEquals(400, assertThrows(ResponseStatusException.class,
+                () -> grnService.createDraft(request)).getStatusCode().value());
+    }
+
+    @Test
+    void createDraftWithFractionalPcsAllocation_ShouldReject() {
+        GRNRequest request = draftRequest(new BigDecimal("2.000"),
+                allocationRequest(1L, "1.500"), allocationRequest(2L, "0.500"));
+        stubDraftDependencies();
+        when(storeLocationRepository.findById(1L)).thenReturn(Optional.of(store1));
+        assertEquals(400, assertThrows(ResponseStatusException.class,
+                () -> grnService.createDraft(request)).getStatusCode().value());
+    }
+
+    @Test
+    void confirmGRN_ShouldIncreaseAllThreeStoreBalances() {
+        when(grnRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(grn));
+        when(stockItemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(stockItem));
+        stubThreeStoreBalances();
+        when(grnRepository.saveAndFlush(any(GRN.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        grnService.confirmGRN(1L);
+
+        ArgumentCaptor<StoreStockBalance> captor = ArgumentCaptor.forClass(StoreStockBalance.class);
+        verify(storeStockBalanceRepository, times(3)).saveAndFlush(captor.capture());
+        var balances = captor.getAllValues();
+        assertEquals(3, balances.size());
+        assertEquals(List.of("10.000", "6.000", "4.000"), balances.stream()
+                .map(balance -> balance.getQuantity().toPlainString()).toList());
+        assertEquals(GRNStatus.CONFIRMED, grn.getStatus());
+        assertEquals(0, new BigDecimal("20.000").compareTo(stockItem.getCurrentQuantity()));
+    }
+
+    @Test
+    void confirmWithMissingAllocations_ShouldNotChangeAnyStock() {
+        grn.getItems().get(0).getAllocations().clear();
+        when(grnRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(grn));
+        when(stockItemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(stockItem));
+
+        assertEquals(400, assertThrows(ResponseStatusException.class,
+                () -> grnService.confirmGRN(1L)).getStatusCode().value());
+        verifyNoInteractions(storeStockBalanceRepository, transactionRepository);
+        assertEquals(0, BigDecimal.ZERO.compareTo(stockItem.getCurrentQuantity()));
+    }
+
+    @Test
+    void confirmWithMismatchedAllocations_ShouldReject() {
+        grn.getItems().get(0).getAllocations().get(0)
+                .setAllocatedQuantity(new BigDecimal("9.000"));
+        when(grnRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(grn));
+        when(stockItemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(stockItem));
+
+        assertEquals(400, assertThrows(ResponseStatusException.class,
+                () -> grnService.confirmGRN(1L)).getStatusCode().value());
+        verifyNoInteractions(storeStockBalanceRepository, transactionRepository);
+    }
+
+    @Test
+    void confirmForInactiveStore_ShouldRejectBeforeStockUpdate() {
+        store1.setActive(false);
+        when(grnRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(grn));
+        when(stockItemRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(stockItem));
+        when(storeLocationRepository.findById(1L)).thenReturn(Optional.of(store1));
+
+        assertEquals(400, assertThrows(ResponseStatusException.class,
+                () -> grnService.confirmGRN(1L)).getStatusCode().value());
+        verifyNoInteractions(storeStockBalanceRepository, transactionRepository);
+    }
+
 }

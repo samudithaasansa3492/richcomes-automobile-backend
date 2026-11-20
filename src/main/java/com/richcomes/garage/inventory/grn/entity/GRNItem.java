@@ -5,6 +5,8 @@ import com.richcomes.garage.inventory.stockitem.entity.StockItem;
 import jakarta.persistence.*;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "grn_items", schema = "garage")
@@ -22,7 +24,6 @@ public class GRNItem {
     @JoinColumn(name = "stock_item_id", nullable = false)
     private StockItem stockItem;
 
-    // Supports whole-number and decimal quantities
     @Column(
             name = "received_quantity",
             nullable = false,
@@ -39,7 +40,28 @@ public class GRNItem {
     )
     private BigDecimal unitCost;
 
+    // One GRN item can be allocated to multiple stores.
+    @OneToMany(
+            mappedBy = "grnItem",
+            cascade = CascadeType.ALL,
+            orphanRemoval = true
+    )
+    private List<GRNItemAllocation> allocations =
+            new ArrayList<>();
+
     public GRNItem() {
+    }
+
+    public void addAllocation(GRNItemAllocation allocation) {
+
+        if (allocation == null) {
+            throw new IllegalArgumentException(
+                    "GRN allocation cannot be null"
+            );
+        }
+
+        allocations.add(allocation);
+        allocation.setGrnItem(this);
     }
 
     public Long getId() {
@@ -76,5 +98,9 @@ public class GRNItem {
 
     public void setUnitCost(BigDecimal unitCost) {
         this.unitCost = unitCost;
+    }
+
+    public List<GRNItemAllocation> getAllocations() {
+        return allocations;
     }
 }

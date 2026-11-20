@@ -1,12 +1,13 @@
-
 package com.richcomes.garage.inventory.grn.service;
 
 import com.richcomes.garage.inventory.grn.dto.request.GRNItemRequest;
 import com.richcomes.garage.inventory.grn.dto.request.GRNRequest;
+import com.richcomes.garage.inventory.grn.dto.request.GRNStoreAllocationRequest;
 import com.richcomes.garage.inventory.grn.dto.response.GRNItemResponse;
 import com.richcomes.garage.inventory.grn.dto.response.GRNResponse;
 import com.richcomes.garage.inventory.grn.entity.GRN;
 import com.richcomes.garage.inventory.grn.entity.GRNItem;
+import com.richcomes.garage.inventory.grn.entity.GRNItemAllocation;
 import com.richcomes.garage.inventory.grn.enums.GRNStatus;
 import com.richcomes.garage.inventory.grn.repository.GRNRepository;
 import com.richcomes.garage.inventory.stockmovement.entity.StockTransaction;
@@ -14,6 +15,10 @@ import com.richcomes.garage.inventory.stockmovement.enums.StockTransactionType;
 import com.richcomes.garage.inventory.stockmovement.repository.StockTransactionRepository;
 import com.richcomes.garage.inventory.stockitem.entity.StockItem;
 import com.richcomes.garage.inventory.stockitem.repository.StockItemRepository;
+import com.richcomes.garage.inventory.store.entity.StoreLocation;
+import com.richcomes.garage.inventory.store.entity.StoreStockBalance;
+import com.richcomes.garage.inventory.store.repository.StoreLocationRepository;
+import com.richcomes.garage.inventory.store.repository.StoreStockBalanceRepository;
 import com.richcomes.garage.inventory.supplier.entity.Supplier;
 import com.richcomes.garage.inventory.supplier.repository.SupplierRepository;
 
@@ -39,400 +44,288 @@ public class GRNService {
     private final SupplierRepository supplierRepository;
     private final StockItemRepository stockItemRepository;
     private final StockTransactionRepository transactionRepository;
+    private final StoreLocationRepository storeLocationRepository;
+    private final StoreStockBalanceRepository storeStockBalanceRepository;
 
     public GRNService(
             GRNRepository grnRepository,
             SupplierRepository supplierRepository,
             StockItemRepository stockItemRepository,
-            StockTransactionRepository transactionRepository) {
-
+            StockTransactionRepository transactionRepository,
+            StoreLocationRepository storeLocationRepository,
+            StoreStockBalanceRepository storeStockBalanceRepository) {
         this.grnRepository = grnRepository;
         this.supplierRepository = supplierRepository;
         this.stockItemRepository = stockItemRepository;
         this.transactionRepository = transactionRepository;
+        this.storeLocationRepository = storeLocationRepository;
+        this.storeStockBalanceRepository = storeStockBalanceRepository;
     }
 
-    // CREATE DRAFT GRN
+    // DRAFT: persist allocations, but do not alter any stock balance.
     @Transactional
     public GRNResponse createDraft(GRNRequest request) {
-
-        if (request == null
-                || request.getSupplierId() == null
-                || request.getItems() == null
-                || request.getItems().isEmpty()) {
-
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Supplier and at least one item are required"
-            );
+        if (request == null || request.getSupplierId() == null
+                || request.getItems() == null || request.getItems().isEmpty()) {
+            throw badRequest("Supplier and at least one item are required");
         }
 
-        Supplier supplier = supplierRepository
-                .findById(request.getSupplierId())
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "Supplier not found"
-                ));
-
+        Supplier supplier = supplierRepository.findById(request.getSupplierId())
+                .orElseThrow(() -> notFound("Supplier not found"));
         if (!supplier.isActive()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Inactive supplier cannot be used for a GRN"
-            );
+            throw badRequest("Inactive supplier cannot be used for a GRN");
+        }
+        if (request.getNotes() != null && request.getNotes().length() > 500) {
+            throw badRequest("GRN notes cannot exceed 500 characters");
         }
 
         GRN grn = new GRN();
         grn.setSupplier(supplier);
-
-        if (request.getNotes() != null
-                && request.getNotes().length() > 500) {
-
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "GRN notes cannot exceed 500 characters"
-            );
-        }
-
         grn.setNotes(request.getNotes());
-
-        // Database UNIQUE constraint remains necessary.
-        grn.setGrnNumber(
-                "GRN-" + UUID.randomUUID()
-                        .toString()
-                        .replace("-", "")
-                        .substring(0, 16)
-                        .toUpperCase()
-        );
+        grn.setGrnNumber("GRN-" + UUID.randomUUID().toString()
+                .replace("-", "").substring(0, 16).toUpperCase());
 
         Set<Long> itemIds = new HashSet<>();
-
         for (GRNItemRequest itemRequest : request.getItems()) {
-
-            if (itemRequest == null
-                    || itemRequest.getStockItemId() == null
-                    || !isValidQuantity(
-                    itemRequest.getReceivedQuantity()
-            )
-                    || !isValidUnitCost(
-                    itemRequest.getUnitCost()
-            )) {
-
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Invalid GRN item quantity or unit cost"
-                );
+            if (itemRequest == null || itemRequest.getStockItemId() == null
+                    || !isValidQuantity(itemRequest.getReceivedQuantity())
+                    || !isValidUnitCost(itemRequest.getUnitCost())) {
+                throw badRequest("Invalid GRN item quantity or unit cost");
             }
-
             if (!itemIds.add(itemRequest.getStockItemId())) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Duplicate stock item in GRN"
-                );
+                throw badRequest("Duplicate stock item in GRN");
             }
 
-            StockItem stockItem = stockItemRepository
-                    .findById(itemRequest.getStockItemId())
-                    .orElseThrow(() -> new ResponseStatusException(
-                            HttpStatus.NOT_FOUND,
-                            "Stock item not found"
-                    ));
-
+            StockItem stockItem = stockItemRepository.findById(itemRequest.getStockItemId())
+                    .orElseThrow(() -> notFound("Stock item not found"));
             if (!stockItem.isActive()) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Inactive stock item cannot be received"
-                );
+                throw badRequest("Inactive stock item cannot be received");
             }
-
-            // NEW: Validate quantity against item's unit.
-            validateQuantityForUnit(
-                    stockItem,
-                    itemRequest.getReceivedQuantity()
-            );
+            validateQuantityForUnit(stockItem, itemRequest.getReceivedQuantity());
 
             GRNItem grnItem = new GRNItem();
-
             grnItem.setStockItem(stockItem);
-            grnItem.setReceivedQuantity(
-                    itemRequest.getReceivedQuantity()
-            );
+            grnItem.setReceivedQuantity(itemRequest.getReceivedQuantity());
             grnItem.setUnitCost(itemRequest.getUnitCost());
 
+            // Require a complete, explicit store split for every received item.
+            List<GRNStoreAllocationRequest> requests = itemRequest.getAllocations();
+            if (requests == null || requests.isEmpty()) {
+                throw badRequest("Every GRN item needs at least one store allocation");
+            }
+            Set<Long> storeIds = new HashSet<>();
+            BigDecimal allocatedTotal = ZERO;
+            for (GRNStoreAllocationRequest allocationRequest : requests) {
+                if (allocationRequest == null || allocationRequest.getStoreLocationId() == null
+                        || allocationRequest.getStoreLocationId() <= 0
+                        || !isValidQuantity(allocationRequest.getAllocatedQuantity())) {
+                    throw badRequest("Invalid store allocation");
+                }
+                Long storeId = allocationRequest.getStoreLocationId();
+                if (!storeIds.add(storeId)) {
+                    throw badRequest("A GRN item cannot allocate the same store twice");
+                }
+                StoreLocation store = storeLocationRepository.findById(storeId)
+                        .orElseThrow(() -> notFound("Store location not found: " + storeId));
+                if (!store.isActive()) {
+                    throw badRequest("Inactive stores cannot receive stock");
+                }
+                BigDecimal quantity = allocationRequest.getAllocatedQuantity();
+                validateQuantityForUnit(stockItem, quantity);
+                allocatedTotal = allocatedTotal.add(quantity);
+
+                GRNItemAllocation allocation = new GRNItemAllocation();
+                allocation.setStoreLocation(store);
+                allocation.setAllocatedQuantity(quantity);
+                grnItem.addAllocation(allocation);
+            }
+            if (allocatedTotal.compareTo(itemRequest.getReceivedQuantity()) != 0) {
+                throw badRequest("Store allocations must equal the GRN received quantity");
+            }
             grn.addItem(grnItem);
         }
 
+        // Cascade from GRN -> GRNItem -> GRNItemAllocation.
         GRN saved = grnRepository.saveAndFlush(grn);
-
-        // DRAFT creation does not increase stock.
         return mapToResponse(saved);
     }
 
-    // GET ALL GRNS
     @Transactional(readOnly = true)
     public List<GRNResponse> getAllGRNs() {
-
-        return grnRepository.findAllByOrderByCreatedAtDesc()
-                .stream()
-                .map(this::mapToResponse)
-                .toList();
+        return grnRepository.findAllByOrderByCreatedAtDesc().stream()
+                .map(this::mapToResponse).toList();
     }
 
-    // GET ONE GRN
     @Transactional(readOnly = true)
     public GRNResponse getGRNById(Long id) {
-
         GRN grn = grnRepository.findById(id)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "GRN not found"
-                ));
-
+                .orElseThrow(() -> notFound("GRN not found"));
         return mapToResponse(grn);
     }
 
-    // CONFIRM GRN AND INCREASE STOCK
+    // CONFIRM: one transaction updates each allocated store and global item total.
     @Transactional
     public GRNResponse confirmGRN(Long id) {
-
         GRN grn = grnRepository.findByIdForUpdate(id)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "GRN not found"
-                ));
-
-        // Prevent duplicate confirmation.
+                .orElseThrow(() -> notFound("GRN not found"));
         if (grn.getStatus() != GRNStatus.DRAFT) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Only DRAFT GRNs can be confirmed"
-            );
+            throw conflict("Only DRAFT GRNs can be confirmed");
         }
-
         if (grn.getItems().isEmpty()) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Cannot confirm an empty GRN"
-            );
+            throw badRequest("Cannot confirm an empty GRN");
         }
 
-        // Consistent lock ordering reduces deadlock risk.
-        List<GRNItem> sortedItems = grn.getItems()
-                .stream()
-                .sorted(Comparator.comparing(
-                        item -> item.getStockItem().getId()
-                ))
+        // Lock stock items in ascending order; use the same ordering for all GRNs.
+        List<GRNItem> sortedItems = grn.getItems().stream()
+                .sorted(Comparator.comparing(item -> item.getStockItem().getId()))
                 .toList();
 
         for (GRNItem grnItem : sortedItems) {
-
-            Long stockItemId = grnItem.getStockItem().getId();
-
-            StockItem stockItem = stockItemRepository
-                    .findByIdForUpdate(stockItemId)
-                    .orElseThrow(() -> new ResponseStatusException(
-                            HttpStatus.NOT_FOUND,
-                            "Stock item not found: " + stockItemId
-                    ));
-
+            Long itemId = grnItem.getStockItem().getId();
+            StockItem stockItem = stockItemRepository.findByIdForUpdate(itemId)
+                    .orElseThrow(() -> notFound("Stock item not found: " + itemId));
             if (!stockItem.isActive()) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Cannot receive inactive stock item"
-                );
+                throw badRequest("Cannot receive inactive stock item");
             }
-
-            BigDecimal received =
-                    grnItem.getReceivedQuantity();
-
-            if (!isValidQuantity(received)) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Invalid received quantity"
-                );
-            }
-
-            // NEW: Recheck unit at confirmation time.
-            // This also protects existing DRAFT records.
+            BigDecimal received = grnItem.getReceivedQuantity();
             validateQuantityForUnit(stockItem, received);
 
-            BigDecimal before =
-                    stockItem.getCurrentQuantity();
-
-            if (before == null
-                    || before.compareTo(ZERO) < 0
-                    || !fitsQuantityColumn(before)) {
-
-                throw new ResponseStatusException(
-                        HttpStatus.CONFLICT,
-                        "Invalid current stock quantity"
-                );
+            List<GRNItemAllocation> allocations = grnItem.getAllocations();
+            if (allocations == null || allocations.isEmpty()) {
+                throw badRequest("Cannot confirm GRN item without store allocations");
+            }
+            Set<Long> seenStores = new HashSet<>();
+            BigDecimal allocatedTotal = ZERO;
+            for (GRNItemAllocation allocation : allocations) {
+                if (allocation == null || allocation.getStoreLocation() == null) {
+                    throw badRequest("Invalid saved GRN store allocation");
+                }
+                Long storeId = allocation.getStoreLocation().getId();
+                if (storeId == null || !seenStores.add(storeId)) {
+                    throw badRequest("Duplicate or invalid store allocation");
+                }
+                validateQuantityForUnit(stockItem, allocation.getAllocatedQuantity());
+                allocatedTotal = allocatedTotal.add(allocation.getAllocatedQuantity());
+            }
+            if (allocatedTotal.compareTo(received) != 0) {
+                throw badRequest("Store allocations must equal the GRN received quantity");
             }
 
+            BigDecimal before = stockItem.getCurrentQuantity();
+            if (before == null || before.compareTo(ZERO) < 0 || !fitsQuantityColumn(before)) {
+                throw conflict("Invalid current stock quantity");
+            }
             BigDecimal after = before.add(received);
-
             if (!fitsQuantityColumn(after)) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "Stock quantity exceeds supported range"
-                );
+                throw badRequest("Stock quantity exceeds supported range");
             }
 
+            // The item row lock serializes GRN receipts for this product, including
+            // first-time balance inserts where a store balance row cannot yet be locked.
+            for (GRNItemAllocation allocation : allocations.stream()
+                    .sorted(Comparator.comparing(a -> a.getStoreLocation().getId()))
+                    .toList()) {
+                Long storeId = allocation.getStoreLocation().getId();
+                StoreLocation store = storeLocationRepository.findById(storeId)
+                        .orElseThrow(() -> notFound("Store location not found: " + storeId));
+                if (!store.isActive()) {
+                    throw badRequest("Cannot confirm receipt for inactive store");
+                }
+
+                StoreStockBalance balance = storeStockBalanceRepository
+                        .findForUpdate(storeId, itemId)
+                        .orElseGet(() -> {
+                            StoreStockBalance newBalance = new StoreStockBalance();
+                            newBalance.setStockItem(stockItem);
+                            newBalance.setStoreLocation(store);
+                            newBalance.setQuantity(ZERO);
+                            return newBalance;
+                        });
+                BigDecimal current = balance.getQuantity();
+                if (current == null || current.compareTo(ZERO) < 0
+                        || !fitsQuantityColumn(current)) {
+                    throw conflict("Invalid store stock balance");
+                }
+                BigDecimal updated = current.add(allocation.getAllocatedQuantity());
+                if (!fitsQuantityColumn(updated)) {
+                    throw badRequest("Store stock quantity exceeds supported range");
+                }
+                balance.setQuantity(updated);
+                storeStockBalanceRepository.saveAndFlush(balance);
+            }
+
+            // Maintain the legacy aggregate while other modules still read it.
             stockItem.setCurrentQuantity(after);
             stockItemRepository.save(stockItem);
 
-            // Record STOCK_IN transaction.
-            StockTransaction transaction =
-                    new StockTransaction();
-
+            StockTransaction transaction = new StockTransaction();
             transaction.setStockItem(stockItem);
-            transaction.setTransactionType(
-                    StockTransactionType.STOCK_IN
-            );
-
+            transaction.setTransactionType(StockTransactionType.STOCK_IN);
             transaction.setQuantity(received);
             transaction.setQuantityBefore(before);
             transaction.setQuantityAfter(after);
-
             transaction.setReferenceType("GRN");
             transaction.setReferenceId(grn.getId());
-
-            transaction.setReason(
-                    "Stock received via " + grn.getGrnNumber()
-            );
-
+            transaction.setReason("Stock received via " + grn.getGrnNumber());
             transactionRepository.save(transaction);
         }
 
         grn.setStatus(GRNStatus.CONFIRMED);
         grn.setReceivedAt(LocalDateTime.now());
-
         grnRepository.saveAndFlush(grn);
-
         return mapToResponse(grn);
     }
 
-    // CANCEL DRAFT GRN
     @Transactional
     public GRNResponse cancelGRN(Long id) {
-
         GRN grn = grnRepository.findByIdForUpdate(id)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND,
-                        "GRN not found"
-                ));
-
+                .orElseThrow(() -> notFound("GRN not found"));
         if (grn.getStatus() != GRNStatus.DRAFT) {
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Only DRAFT GRNs can be cancelled"
-            );
+            throw conflict("Only DRAFT GRNs can be cancelled");
         }
-
         grn.setStatus(GRNStatus.CANCELLED);
-
         GRN saved = grnRepository.saveAndFlush(grn);
-
-        // Cancelling a DRAFT does not change stock.
+        // DRAFT never changed any stock, so there is nothing to roll back.
         return mapToResponse(saved);
     }
 
-    // NEW: VALIDATE QUANTITY AGAINST ITEM UNIT
-    private void validateQuantityForUnit(
-            StockItem stockItem,
-            BigDecimal quantity) {
-
-        if (stockItem == null || !isValidQuantity(quantity)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "Invalid stock item or quantity"
-            );
+    private void validateQuantityForUnit(StockItem item, BigDecimal quantity) {
+        if (item == null || !isValidQuantity(quantity)) {
+            throw badRequest("Invalid stock item or quantity");
         }
-
-        String unit = stockItem.getUnit();
-
+        String unit = item.getUnit();
         if ("PCS".equals(unit)) {
-
-            // 5 and 5.000 are whole numbers.
-            // 1.5 is not a whole number.
             if (quantity.stripTrailingZeros().scale() > 0) {
-                throw new ResponseStatusException(
-                        HttpStatus.BAD_REQUEST,
-                        "PCS items require whole-number quantities"
-                );
+                throw badRequest("PCS items require whole-number quantities");
             }
-
-        } else if (!"L".equals(unit)
-                && !"ML".equals(unit)) {
-
-            // Reject unknown units rather than allowing
-            // unvalidated stock movements.
-            throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "Stock item has an invalid measurement unit"
-            );
+        } else if (!"L".equals(unit) && !"ML".equals(unit)) {
+            throw conflict("Stock item has an invalid measurement unit");
         }
     }
 
-    // VALIDATE POSITIVE DECIMAL QUANTITY
     private boolean isValidQuantity(BigDecimal quantity) {
-
-        return quantity != null
-                && quantity.compareTo(ZERO) > 0
+        return quantity != null && quantity.compareTo(ZERO) > 0
                 && fitsQuantityColumn(quantity);
     }
 
-    // VALIDATE NUMERIC(14,3)
     private boolean fitsQuantityColumn(BigDecimal quantity) {
-
-        if (quantity == null) {
-            return false;
-        }
-
-        BigDecimal normalized =
-                quantity.stripTrailingZeros();
-
-        int fractionDigits =
-                Math.max(0, normalized.scale());
-
-        int integerDigits =
-                Math.max(
-                        0,
-                        normalized.precision() - normalized.scale()
-                );
-
-        return fractionDigits <= 3
-                && integerDigits <= 11;
+        if (quantity == null) return false;
+        BigDecimal normalized = quantity.stripTrailingZeros();
+        int fractionDigits = Math.max(0, normalized.scale());
+        int integerDigits = Math.max(0, normalized.precision() - normalized.scale());
+        return fractionDigits <= 3 && integerDigits <= 11;
     }
 
-    // VALIDATE NUMERIC(12,2) UNIT COST
     private boolean isValidUnitCost(BigDecimal unitCost) {
-
-        if (unitCost == null
-                || unitCost.compareTo(ZERO) < 0) {
-            return false;
-        }
-
-        BigDecimal normalized =
-                unitCost.stripTrailingZeros();
-
-        int fractionDigits =
-                Math.max(0, normalized.scale());
-
-        int integerDigits =
-                Math.max(
-                        0,
-                        normalized.precision() - normalized.scale()
-                );
-
-        return fractionDigits <= 2
-                && integerDigits <= 10;
+        if (unitCost == null || unitCost.compareTo(ZERO) < 0) return false;
+        BigDecimal normalized = unitCost.stripTrailingZeros();
+        int fractionDigits = Math.max(0, normalized.scale());
+        int integerDigits = Math.max(0, normalized.precision() - normalized.scale());
+        return fractionDigits <= 2 && integerDigits <= 10;
     }
 
-    // ENTITY TO RESPONSE DTO
     private GRNResponse mapToResponse(GRN grn) {
-
         GRNResponse response = new GRNResponse();
-
         response.setId(grn.getId());
         response.setGrnNumber(grn.getGrnNumber());
         response.setSupplierId(grn.getSupplier().getId());
@@ -440,55 +333,46 @@ public class GRNService {
         response.setReceivedAt(grn.getReceivedAt());
         response.setCreatedAt(grn.getCreatedAt());
         response.setNotes(grn.getNotes());
+        response.setSupplierName(grn.getSupplier().getSupplierName());
 
-        response.setSupplierName(
-                grn.getSupplier().getSupplierName()
-        );
-
-        List<GRNItemResponse> itemResponses =
-                grn.getItems()
-                        .stream()
-                        .map(this::mapItemToResponse)
-                        .toList();
-
+        List<GRNItemResponse> itemResponses = grn.getItems().stream()
+                .map(this::mapItemToResponse).toList();
         response.setItems(itemResponses);
-
-        BigDecimal total = itemResponses.stream()
+        response.setTotalAmount(itemResponses.stream()
                 .map(GRNItemResponse::getLineTotal)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-
-        response.setTotalAmount(total);
-
+                .reduce(ZERO, BigDecimal::add));
         return response;
     }
 
-    // GRN ITEM ENTITY TO RESPONSE DTO
     private GRNItemResponse mapItemToResponse(GRNItem item) {
-
         GRNItemResponse response = new GRNItemResponse();
-
         response.setId(item.getId());
-        response.setStockItemId(
-                item.getStockItem().getId()
-        );
-        response.setItemCode(
-                item.getStockItem().getItemCode()
-        );
-        response.setItemName(
-                item.getStockItem().getItemName()
-        );
-
-        response.setReceivedQuantity(
-                item.getReceivedQuantity()
-        );
-
+        response.setStockItemId(item.getStockItem().getId());
+        response.setItemCode(item.getStockItem().getItemCode());
+        response.setItemName(item.getStockItem().getItemName());
+        response.setReceivedQuantity(item.getReceivedQuantity());
         response.setUnitCost(item.getUnitCost());
-
-        BigDecimal lineTotal = item.getUnitCost()
-                .multiply(item.getReceivedQuantity());
-
-        response.setLineTotal(lineTotal);
-
+        response.setLineTotal(item.getUnitCost().multiply(item.getReceivedQuantity()));
+        response.setAllocations(item.getAllocations().stream()
+                .sorted(Comparator.comparing(a -> a.getStoreLocation().getId()))
+                .map(a -> new GRNItemResponse.StoreAllocationResponse(
+                        a.getStoreLocation().getId(),
+                        a.getStoreLocation().getStoreCode(),
+                        a.getStoreLocation().getStoreName(),
+                        a.getAllocatedQuantity()))
+                .toList());
         return response;
+    }
+
+    private ResponseStatusException badRequest(String message) {
+        return new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
+    }
+
+    private ResponseStatusException notFound(String message) {
+        return new ResponseStatusException(HttpStatus.NOT_FOUND, message);
+    }
+
+    private ResponseStatusException conflict(String message) {
+        return new ResponseStatusException(HttpStatus.CONFLICT, message);
     }
 }
