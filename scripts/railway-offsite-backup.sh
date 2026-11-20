@@ -52,6 +52,11 @@ if [[ "$action" == upload ]]; then
     die "Source project is not the approved Supabase project"
   grep -qx 'FLYWAY_HISTORY=14:14' "$src/manifest.txt" ||
     die "Backup snapshot is not pre-V15 V14"
+  grep -qx 'BACKUP_FORMAT_VERSION=2' "$src/manifest.txt" ||
+    die "Backup snapshot lacks the source row-count manifest; create a fresh export"
+  source_counts="$(sed -n 's/^APP_ROW_COUNTS=//p' "$src/manifest.txt")"
+  [[ "$source_counts" =~ ^[0-9]+(:[0-9]+){6}$ ]] ||
+    die "Backup snapshot row-count manifest invalid or missing"
   grep -qx 'RESTORE_TEST=isolated_postgres17_pass' "$src/manifest.txt" ||
     die "Local restore rehearsal not confirmed"
   (cd "$src" && sha256sum --check --status SHA256SUMS) ||
@@ -106,6 +111,11 @@ grep -qx 'PROJECT_REF=iehuxwbrwfysgujaqagj' "$tmp/recovered/manifest.txt" ||
   die "Recovered project does not match"
 grep -qx 'FLYWAY_HISTORY=14:14' "$tmp/recovered/manifest.txt" ||
   die "Recovered history version does not match"
+grep -qx 'BACKUP_FORMAT_VERSION=2' "$tmp/recovered/manifest.txt" ||
+  die "Recovered archive lacks source row-count verification"
+source_counts="$(sed -n 's/^APP_ROW_COUNTS=//p' "$tmp/recovered/manifest.txt")"
+[[ "$source_counts" =~ ^[0-9]+(:[0-9]+){6}$ ]] ||
+  die "Recovered row-count manifest missing or malformed"
 pg_restore --list "$tmp/recovered/garage.dump" >/dev/null ||
   die "Garage database archive corrupted"
 pg_restore --list "$tmp/recovered/flyway-history.dump" >/dev/null ||
@@ -138,7 +148,23 @@ history="$(docker exec "$container" psql -X -qAt -v ON_ERROR_STOP=1 \
   -U postgres -d postgres -c "SELECT count(*)::text || ':' || max(version::int)::text
     FROM public.flyway_schema_history WHERE success AND version ~ '^[0-9]+$'")"
 [[ "$history" == 14:14 ]] || die "Restored Flyway history incomplete"
+# Exactly the same seven canonical table counts verified against the source
+# during the read-only local backup rehearsal. An archive with unchanged Flyway
+# metadata but missing garage rows must NOT be described as a passed restore.
+counts_sql="SELECT (SELECT count(*) FROM garage.employees)::text || ':' ||
+ (SELECT count(*) FROM garage.customers)::text || ':' ||
+ (SELECT count(*) FROM garage.vehicles)::text || ':' ||
+ (SELECT count(*) FROM garage.stock_items)::text || ':' ||
+ (SELECT count(*) FROM garage.grns)::text || ':' ||
+ (SELECT count(*) FROM garage.service_jobs)::text || ':' ||
+ (SELECT count(*) FROM garage.sales_invoices)::text"
+recovered_counts="$(docker exec "$container" psql -X -qAt -v ON_ERROR_STOP=1 \
+  -U postgres -d postgres -c "$counts_sql")" ||
+  die "Unable to verify recovered garage table counts"
+[[ "$recovered_counts" == "$source_counts" ]] ||
+  die "Off-site restore has mismatched garage table counts; refusing release readiness"
 echo "PASS: independent retrieval, decryption, hashes and networkless Postgres restoration"
+echo "PASS: recovered seven-table counts match the pre-V15 source snapshot"
 echo "RESTORED_FLYWAY_HISTORY=$history"
 echo "SOURCE_DATABASE_WRITES=NONE"
 echo "SCOPE=garage_schema_plus_public_flyway_history_only"

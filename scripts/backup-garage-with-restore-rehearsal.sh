@@ -124,6 +124,8 @@ printf 'Source schema/Flyway restoration PASS on isolated PostgreSQL 17.\n'
 printf '%s\n' \
   "PROJECT_REF=$PROJECT_REF" \
   "FLYWAY_HISTORY=$before" \
+  "BACKUP_FORMAT_VERSION=2" \
+  "APP_ROW_COUNTS=$original_counts" \
   "SCOPE=garage schema + public.flyway_schema_history only" \
   "RESTORE_TEST=isolated_postgres17_pass" \
   "OFFSITE_COPY=NOT_VERIFIED" \
