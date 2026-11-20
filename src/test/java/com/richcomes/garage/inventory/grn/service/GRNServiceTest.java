@@ -682,4 +682,93 @@ class GRNServiceTest {
         verifyNoInteractions(storeStockBalanceRepository, transactionRepository);
     }
 
+
+    // Supplier purchase history tests (D07).
+    @Test
+    void supplierHistory_WithInvalidIds_ShouldRejectBeforeDatabaseAccess() {
+        for (Long invalidId : new Long[]{null, 0L, -2L}) {
+            ResponseStatusException exception = assertThrows(
+                    ResponseStatusException.class,
+                    () -> grnService.getSupplierPurchaseHistory(invalidId));
+            assertEquals(400, exception.getStatusCode().value());
+        }
+        verifyNoInteractions(supplierRepository, grnRepository);
+    }
+
+    @Test
+    void supplierHistory_ForUnknownSupplier_ShouldReturnNotFound() {
+        when(supplierRepository.existsById(99L)).thenReturn(false);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> grnService.getSupplierPurchaseHistory(99L));
+
+        assertEquals(404, exception.getStatusCode().value());
+        verify(grnRepository, never()).findBySupplierIdOrderByCreatedAtDesc(any());
+    }
+
+    @Test
+    void supplierHistory_WithNoGrns_ShouldReturnEmptyList() {
+        when(supplierRepository.existsById(1L)).thenReturn(true);
+        when(grnRepository.findBySupplierIdOrderByCreatedAtDesc(1L))
+                .thenReturn(List.of());
+
+        var history = grnService.getSupplierPurchaseHistory(1L);
+
+        assertTrue(history.isEmpty());
+        verify(grnRepository).findBySupplierIdOrderByCreatedAtDesc(1L);
+        verifyNoInteractions(stockItemRepository, transactionRepository);
+    }
+
+    @Test
+    void supplierHistory_ShouldReturnGrnsInRepositoryOrderWithStatusesAndAmounts() {
+        GRN confirmed = grn;
+        confirmed.setStatus(GRNStatus.CONFIRMED);
+
+        GRN cancelled = new GRN();
+        cancelled.setSupplier(grn.getSupplier());
+        cancelled.setGrnNumber("GRN-TEST-002");
+        cancelled.setStatus(GRNStatus.CANCELLED);
+        GRNItem cancelledItem = new GRNItem();
+        cancelledItem.setStockItem(stockItem);
+        cancelledItem.setReceivedQuantity(new BigDecimal("3.000"));
+        cancelledItem.setUnitCost(new BigDecimal("100.00"));
+        cancelled.addItem(cancelledItem);
+        cancelledItem.addAllocation(allocation(store1, "3.000"));
+
+        when(supplierRepository.existsById(1L)).thenReturn(true);
+        when(grnRepository.findBySupplierIdOrderByCreatedAtDesc(1L))
+                .thenReturn(List.of(confirmed, cancelled));
+
+        var history = grnService.getSupplierPurchaseHistory(1L);
+
+        assertEquals(2, history.size());
+        assertEquals("GRN-TEST-001", history.get(0).getGrnNumber());
+        assertEquals(GRNStatus.CONFIRMED, history.get(0).getStatus());
+        assertEquals(0, new BigDecimal("30000.00")
+                .compareTo(history.get(0).getTotalAmount()));
+        assertEquals(3, history.get(0).getItems().get(0).getAllocations().size());
+        assertEquals("GRN-TEST-002", history.get(1).getGrnNumber());
+        assertEquals(GRNStatus.CANCELLED, history.get(1).getStatus());
+        assertEquals(0, new BigDecimal("300.00")
+                .compareTo(history.get(1).getTotalAmount()));
+        // History includes cancelled GRNs; callers must not count them as purchases.
+        verifyNoInteractions(transactionRepository, storeStockBalanceRepository);
+    }
+
+    @Test
+    void supplierHistory_ForInactiveExistingSupplier_ShouldStillReturnHistory() {
+        // History is allowed for inactive suppliers as long as the supplier exists.
+        grn.getSupplier().setActive(false);
+        when(supplierRepository.existsById(1L)).thenReturn(true);
+        when(grnRepository.findBySupplierIdOrderByCreatedAtDesc(1L))
+                .thenReturn(List.of(grn));
+
+        var history = grnService.getSupplierPurchaseHistory(1L);
+
+        assertEquals(1, history.size());
+        assertEquals(1L, history.get(0).getSupplierId());
+        assertEquals(GRNStatus.DRAFT, history.get(0).getStatus());
+    }
+
 }

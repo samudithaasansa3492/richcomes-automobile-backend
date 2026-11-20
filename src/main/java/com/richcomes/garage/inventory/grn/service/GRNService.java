@@ -163,6 +163,24 @@ public class GRNService {
         return mapToResponse(grn);
     }
 
+    // Supplier GRN history: include DRAFT/CANCELLED for traceability.
+    // Consumers should count only CONFIRMED GRNs in actual purchase totals.
+    // The SupplierController endpoint will call this method in a separate step.
+    @Transactional(readOnly = true)
+    public List<GRNResponse> getSupplierPurchaseHistory(Long supplierId) {
+        if (supplierId == null || supplierId <= 0) {
+            throw badRequest("Valid supplier ID is required");
+        }
+        // Inactive suppliers still have historical records.
+        if (!supplierRepository.existsById(supplierId)) {
+            throw notFound("Supplier not found");
+        }
+        return grnRepository.findBySupplierIdOrderByCreatedAtDesc(supplierId)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
     // CONFIRM: one transaction updates each allocated store and global item total.
     @Transactional
     public GRNResponse confirmGRN(Long id) {
@@ -231,7 +249,6 @@ public class GRNService {
                 if (!store.isActive()) {
                     throw badRequest("Cannot confirm receipt for inactive store");
                 }
-
                 StoreStockBalance balance = storeStockBalanceRepository
                         .findForUpdate(storeId, itemId)
                         .orElseGet(() -> {
