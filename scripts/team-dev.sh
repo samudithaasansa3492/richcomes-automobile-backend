@@ -63,7 +63,7 @@ case "$ACTION" in
     export RICHCOMES_TEAM_PASSWORD="$(cat "$RICHCOMES_TEAM_STATE/password")"
     docker compose --project-name "$PROJECT" -f "$COMPOSE" down --remove-orphans -v
     # Remove keys so next dev start gets a new synthetic identity.
-    rm -f "$RICHCOMES_TEAM_STATE/private.pem" "$RICHCOMES_TEAM_STATE/public.pem" "$RICHCOMES_TEAM_STATE/password"
+    rm -f "$RICHCOMES_TEAM_STATE/private.pem" "$RICHCOMES_TEAM_STATE/public.pem" "$RICHCOMES_TEAM_STATE/password" "$RICHCOMES_TEAM_STATE/test-user-logins.txt"
     echo "Disposable team database stopped and temporary secrets destroyed."
     ;;
   verify)
