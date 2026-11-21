@@ -2,6 +2,8 @@
 package com.richcomes.garage.inventory.grn.dto.response;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
 
 public class GRNItemResponse {
 
@@ -10,11 +12,13 @@ public class GRNItemResponse {
     private String itemCode;
     private String itemName;
 
-    // Supports integer and decimal quantities
     private BigDecimal receivedQuantity;
-
     private BigDecimal unitCost;
     private BigDecimal lineTotal;
+
+    // Store-wise allocation details for this GRN item.
+    private List<StoreAllocationResponse> allocations =
+            new ArrayList<>();
 
     public GRNItemResponse() {
     }
@@ -73,5 +77,26 @@ public class GRNItemResponse {
 
     public void setLineTotal(BigDecimal lineTotal) {
         this.lineTotal = lineTotal;
+    }
+
+    public List<StoreAllocationResponse> getAllocations() {
+        return allocations;
+    }
+
+    public void setAllocations(
+            List<StoreAllocationResponse> allocations) {
+
+        this.allocations = allocations == null
+                ? new ArrayList<>()
+                : new ArrayList<>(allocations);
+    }
+
+    // DTO returned to the frontend for each store allocation.
+    public record StoreAllocationResponse(
+            Long storeLocationId,
+            String storeCode,
+            String storeName,
+            BigDecimal allocatedQuantity
+    ) {
     }
 }

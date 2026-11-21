@@ -1,6 +1,8 @@
 
 package com.richcomes.garage.inventory.supplier.controller;
 
+import com.richcomes.garage.inventory.grn.dto.response.GRNResponse;
+import com.richcomes.garage.inventory.grn.service.GRNService;
 import com.richcomes.garage.inventory.supplier.dto.request.SupplierRequest;
 import com.richcomes.garage.inventory.supplier.dto.responce.SupplierResponse;
 import com.richcomes.garage.inventory.supplier.service.SupplierService;
@@ -18,9 +20,14 @@ import java.util.List;
 public class SupplierController {
 
     private final SupplierService service;
+    private final GRNService grnService;
 
-    public SupplierController(SupplierService service) {
+    public SupplierController(
+            SupplierService service,
+            GRNService grnService) {
+
         this.service = service;
+        this.grnService = grnService;
     }
 
     // CREATE SUPPLIER
@@ -49,6 +56,16 @@ public class SupplierController {
             @PathVariable Long id) {
 
         return ResponseEntity.ok(service.getSupplierById(id));
+    }
+
+    // GET SUPPLIER PURCHASE / GRN HISTORY
+    @GetMapping("/{id}/purchase-history")
+    public ResponseEntity<List<GRNResponse>> getPurchaseHistory(
+            @PathVariable Long id) {
+
+        return ResponseEntity.ok(
+                grnService.getSupplierPurchaseHistory(id)
+        );
     }
 
     // UPDATE SUPPLIER

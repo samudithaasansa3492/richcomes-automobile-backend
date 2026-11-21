@@ -1,4 +1,5 @@
-package com.richcomes.garage.auth.config;
+
+        package com.richcomes.garage.auth.config;
 
 import com.richcomes.garage.auth.security.AccountJwtAuthenticationConverter;
 import com.richcomes.garage.auth.security.SecurityErrorHandlers;
@@ -121,8 +122,17 @@ public class SecurityConfig {
                                 "/api/inventory/categories", "/api/inventory/categories/**",
                                 "/api/inventory/items", "/api/inventory/items/**",
                                 "/api/inventory/grns", "/api/inventory/grns/**",
+                                // Multi-store location dropdown and per-store stock read endpoints.
+                                "/api/inventory/stores", "/api/inventory/stores/**",
                                 "/api/inventory/stock-transactions", "/api/inventory/stock-transactions/**")
                         .hasAuthority("inventory:read")
+                        // Sensitive inventory writes require action-specific permissions.
+                        .requestMatchers(HttpMethod.POST, "/api/inventory/grns/{id}/confirm")
+                        .hasAuthority("inventory:grn:confirm")
+                        .requestMatchers(HttpMethod.POST, "/api/inventory/grns/{id}/cancel")
+                        .hasAuthority("inventory:grn:cancel")
+                        .requestMatchers(HttpMethod.POST, "/api/inventory/stock-transactions")
+                        .hasAuthority("inventory:stock:adjust")
                         .requestMatchers(HttpMethod.POST, "/api/inventory/suppliers",
                                 "/api/inventory/categories", "/api/inventory/items",
                                 "/api/inventory/grns").hasAuthority("inventory:create")

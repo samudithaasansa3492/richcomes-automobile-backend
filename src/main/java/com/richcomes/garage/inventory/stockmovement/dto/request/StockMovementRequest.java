@@ -6,6 +6,7 @@ import com.richcomes.garage.inventory.stockmovement.enums.StockTransactionType;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
@@ -13,23 +14,19 @@ import java.math.BigDecimal;
 public class StockMovementRequest {
 
     @NotNull(message = "Stock item ID is required")
+    @Positive(message = "Stock item ID must be positive")
     private Long stockItemId;
+
+    @NotNull(message = "Store location ID is required")
+    @Positive(message = "Store location ID must be positive")
+    private Long storeLocationId;
 
     @NotNull(message = "Transaction type is required")
     private StockTransactionType transactionType;
 
-    // Supports both whole-number and decimal quantities
     @NotNull(message = "Quantity is required")
-    @DecimalMin(
-            value = "0.000",
-            inclusive = false,
-            message = "Quantity must be greater than zero"
-    )
-    @Digits(
-            integer = 11,
-            fraction = 3,
-            message = "Quantity supports up to 3 decimal places"
-    )
+    @DecimalMin(value = "0.000", inclusive = false)
+    @Digits(integer = 11, fraction = 3)
     private BigDecimal quantity;
 
     @Size(max = 500)
@@ -46,12 +43,19 @@ public class StockMovementRequest {
         this.stockItemId = stockItemId;
     }
 
+    public Long getStoreLocationId() {
+        return storeLocationId;
+    }
+
+    public void setStoreLocationId(Long storeLocationId) {
+        this.storeLocationId = storeLocationId;
+    }
+
     public StockTransactionType getTransactionType() {
         return transactionType;
     }
 
-    public void setTransactionType(
-            StockTransactionType transactionType) {
+    public void setTransactionType(StockTransactionType transactionType) {
         this.transactionType = transactionType;
     }
 
