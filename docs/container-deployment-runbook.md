@@ -1,5 +1,8 @@
 # Richcomes Spring Boot release — protected container deployment
 
+> **2026-11-21 live state:** connected shared Supabase has **26 successful Flyway migrations** through V26, and the `garage.user_accounts` table exists. V24–V26 scripts on the inventory feature branch match the applied Flyway CRC checksums. Railway backend remains staged and not deployed. A verified full recoverable backup of the **current V26 database** is still missing; do not claim older V14 snapshots protect V26 data. This integration does not provision secrets or launch customer traffic.
+
+
 **Status:** container and readiness code is integrated/tested in GitHub, but the *actual hosted service is not yet deployed*. The connected shared Supabase project is a Free-tier dev project at V14; this API release requires V23. No actual off-site recovery backup, approved external SMTP sender, hosted HTTPS origin, or private RSA key mount has been verified yet.
 
 ## Target architecture
