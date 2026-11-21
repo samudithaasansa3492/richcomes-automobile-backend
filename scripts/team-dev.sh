@@ -76,11 +76,11 @@ case "$ACTION" in
     count="$(docker compose --project-name "$PROJECT" -f "$COMPOSE" exec -T database \
       psql -U postgres -d richcomes_team -Atc \
       "SELECT COUNT(*) FROM public.flyway_schema_history WHERE success" 2>/dev/null)"
-    [[ "$count" == 23 ]] || { echo "FAIL: expected 23 disposable Flyway migrations, got $count" >&2; exit 1; }
+    [[ "$count" == 26 ]] || { echo "FAIL: expected 26 disposable Flyway migrations, got $count" >&2; exit 1; }
     # Neither database ports nor customer data are exposed to the host.
     [[ -z "$(docker port "$(docker compose --project-name "$PROJECT" -f "$COMPOSE" ps -q database)" 5432/tcp 2>/dev/null)" ]] ||
       { echo "FAIL: local PostgreSQL unexpectedly published" >&2; exit 1; }
-    echo "PASS: disposable team backend readiness UP; migrations V1-V23; DB port private"
+    echo "PASS: disposable team backend readiness UP; migrations V1-V26; DB port private"
     ;;
   logs)
     container_id="$(docker ps -aq --filter "name=^/${PROJECT}-backend-1$" | head -n 1)"
