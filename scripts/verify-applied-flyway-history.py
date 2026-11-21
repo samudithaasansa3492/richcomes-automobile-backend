@@ -27,11 +27,12 @@ def flyway_sql_checksum(path: Path) -> int:
     return crc if crc < (1 << 31) else crc - (1 << 32)
 
 
-def verify(history_csv: str, root: Path = ROOT) -> list[str]:
+def verify(history_csv: str, root: Path = ROOT, expected_latest: int = 14) -> list[str]:
+    expected_versions = tuple(range(1, expected_latest + 1))
     rows = list(csv.reader(io.StringIO(history_csv)))
     errors: list[str] = []
-    if len(rows) != len(EXPECTED_VERSIONS):
-        errors.append(f"Expected exactly 14 applied migration rows, found {len(rows)}")
+    if len(rows) != len(expected_versions):
+        errors.append(f"Expected exactly {expected_latest} applied migration rows, found {len(rows)}")
     seen: set[int] = set()
     for row in rows:
         if len(row) != 5:
@@ -45,8 +46,8 @@ def verify(history_csv: str, root: Path = ROOT) -> list[str]:
         except ValueError:
             errors.append("Malformed history CSV: rank, version and checksum must be integers")
             continue
-        if version not in EXPECTED_VERSIONS:
-            errors.append(f"Unexpected applied version V{version} (expected only V1-V14)")
+        if version not in expected_versions:
+            errors.append(f"Unexpected applied version V{version} (expected only V1-V{expected_latest})")
             continue
         if rank != version:
             errors.append(f"V{version}: noncontiguous installed rank {rank}")
@@ -73,7 +74,7 @@ def verify(history_csv: str, root: Path = ROOT) -> list[str]:
             errors.append(
                 f"V{version}: applied checksum {checksum} != source checksum {actual_checksum}"
             )
-    missing = set(EXPECTED_VERSIONS) - seen
+    missing = set(expected_versions) - seen
     if missing:
         errors.append("Missing successful history versions: " + ",".join(map(str, sorted(missing))))
     return errors
@@ -85,19 +86,21 @@ def main() -> int:
         "--history-csv", type=str, default="-",
         help="CSV file from read-only catalog COPY query, or '-' to read stdin",
     )
+    parser.add_argument('--expected-version', type=int, choices=(14, 26), default=14,
+                        help='Exact frozen source migration upper bound; default V14 for historical archives')
     args = parser.parse_args()
     try:
         source = sys.stdin.read() if args.history_csv == "-" else Path(args.history_csv).read_text()
     except OSError as exc:
         print(f"STOP: Unable to load history CSV: {type(exc).__name__}", file=sys.stderr)
         return 2
-    errors = verify(source)
+    errors = verify(source, expected_latest=args.expected_version)
     if errors:
         print("FAIL: applied SQL migration preflight", file=sys.stderr)
         for message in errors:
             print(" - " + message, file=sys.stderr)
         return 1
-    print("PASS: shared V1-V14 Flyway history matches 14 immutable Git source names and CRC32 checksums")
+    print(f"PASS: shared V1-V{args.expected_version} Flyway history matches {args.expected_version} immutable Git source names and CRC32 checksums")
     print("NOTE: this is read-only history matching, NOT a backup, migration or deploy authorization")
     return 0
 
