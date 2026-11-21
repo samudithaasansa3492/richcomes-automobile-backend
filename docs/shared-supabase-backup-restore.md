@@ -1,5 +1,8 @@
 # Shared V14 database backup & restore release gate
 
+> **STOP — historical V14-only backup script.** As of 2026-11-21 the connected shared Supabase source is already V26. `backup-garage-with-restore-rehearsal.sh` intentionally refuses that schema; do not bypass its V14 version check. A new reviewed V26-compatible snapshot, private encryption, off-site retrieval and independent restore of the actual current data are required. Existing instructions below apply only to verified historical V14 snapshots.
+
+
 **Status (2026-11-18): NOT executed on the shared database.** The connected Supabase organization is on Free; scheduled daily backup and PITR were not verified. Flyway V15–V23 remain **unapplied** to `richcomes-automobile-dev`, and onboarding must remain OFF. Do not interpret GitHub CI or a GitHub repo commit as a verified backup.
 
 ## Read-only V14 checksum preflight (verified 2026-11-19)
