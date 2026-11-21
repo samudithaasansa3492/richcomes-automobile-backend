@@ -21,7 +21,7 @@ COMPOSE="$ROOT/compose.team-dev.yml"
 PROJECT="richcomes-team-$(id -u)"
 db_container="$(docker compose -p "$PROJECT" -f "$COMPOSE" ps -q database)"
 [[ -n "$db_container" ]] || die "Private Docker database is not running"
-[[ "$(docker inspect -f '${.State.Running}' "$db_container")" == true ]] ||
+[[ "$(docker inspect -f '{{.State.Running}}' "$db_container")" == true ]] ||
   die "Private Docker database is not running"
 [[ -z "$(docker port "$db_container" 5432/tcp 2>/dev/null)" ]] ||
   die "Refusing DB with a published TCP port"
