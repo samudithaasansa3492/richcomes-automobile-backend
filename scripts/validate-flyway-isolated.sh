@@ -269,6 +269,76 @@ verify_inventory_v26() {
   echo "PASS: ${db} V24-V26 multi-store tables, service-part location and OWNER permissions"
 }
 
+verify_v26_backup_roundtrip() {
+  echo '=== Exercise complete 33-table V26 garage/history backup restore in disposable PostgreSQL ==='
+  docker exec "$CONTAINER" pg_dump -U postgres -d richcomes_fresh --format=custom \
+    --no-owner --no-acl --schema=garage -f /tmp/garage-v26-ci.dump
+  docker exec "$CONTAINER" pg_dump -U postgres -d richcomes_fresh --format=custom \
+    --no-owner --no-acl --table=public.flyway_schema_history -f /tmp/history-v26-ci.dump
+  docker exec "$CONTAINER" createdb -U postgres richcomes_v26_restore
+  docker exec "$CONTAINER" pg_restore -U postgres -d richcomes_v26_restore \
+    --exit-on-error --no-owner --no-acl /tmp/garage-v26-ci.dump
+  docker exec "$CONTAINER" pg_restore -U postgres -d richcomes_v26_restore \
+    --exit-on-error --no-owner --no-acl /tmp/history-v26-ci.dump
+  docker cp scripts/garage-v26-exact-counts.sql "$CONTAINER:/tmp/garage-v26-exact-counts.sql"
+  local before after versions
+  before="$(docker exec "$CONTAINER" psql -U postgres -d richcomes_fresh -qAt -v ON_ERROR_STOP=1 \
+    -f /tmp/garage-v26-exact-counts.sql)"
+  after="$(docker exec "$CONTAINER" psql -U postgres -d richcomes_v26_restore -qAt -v ON_ERROR_STOP=1 \
+    -f /tmp/garage-v26-exact-counts.sql)"
+  [[ "$before" =~ ^[0-9]+(:[0-9]+){32}$ && "$before" == "$after" ]] || {
+    echo 'FAIL: V26 source and isolated recovered table counts differ'; exit 1;
+  }
+  versions="$(docker exec "$CONTAINER" psql -U postgres -d richcomes_v26_restore -qAt \
+    -c "SELECT COUNT(*)::text || ':' || max(version::int)::text FROM public.flyway_schema_history
+        WHERE success AND version ~ '^[0-9]+
+flyway fresh latest
+verify_count fresh
+verify_customer_security fresh
+verify_business_delegation fresh
+verify_browser_denial fresh
+verify_inventory_v26 fresh
+verify_v26_backup_roundtrip
+
+echo '=== Simulate upgrade V1-V14 to V26 ==='
+flyway upgrade 14
+verify_isolated_backup_roundtrip
+flyway upgrade 18
+
+# Synthetic legacy OWNER_ADMIN account exists only in the throwaway upgrade DB.
+docker exec -i "$CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d richcomes_upgrade <<'SQL'
+WITH employee AS (
+  INSERT INTO garage.employees(employee_code,nic,first_name,last_name,phone,position)
+  VALUES ('VALIDATION-OWNER','VALIDATION-NIC','Sample','Owner','0770000000','OWNER_ADMIN')
+  RETURNING id
+), account AS (
+  INSERT INTO garage.user_accounts(employee_id,username,password_hash,enabled)
+  SELECT id, 'validation.owner', 'synthetic-not-a-login-secret', TRUE FROM employee
+  RETURNING id
+)
+INSERT INTO garage.user_account_roles(user_account_id,role_id)
+SELECT account.id, role.id FROM account CROSS JOIN garage.roles role
+WHERE role.code = 'OWNER_ADMIN';
+SQL
+
+flyway upgrade latest
+verify_count upgrade
+verify_customer_security upgrade
+verify_business_delegation upgrade
+verify_browser_denial upgrade
+verify_inventory_v26 upgrade
+owner_count="$(docker exec "$CONTAINER" psql -U postgres -d richcomes_upgrade -Atc \
+  "SELECT count(*) FROM garage.user_accounts a JOIN garage.user_account_roles ar ON ar.user_account_id=a.id JOIN garage.roles r ON r.id=ar.role_id JOIN garage.employees e ON e.id=a.employee_id WHERE a.username='validation.owner' AND a.enabled AND a.identity_kind='BUSINESS' AND r.code='OWNER' AND e.position='OWNER'")"
+test "$owner_count" = 1 || { echo 'FAIL: synthetic legacy OWNER was not preserved'; exit 1; }
+echo 'PASS: synthetic legacy OWNER account, grants and identity preserved'
+echo 'PASS: disposable Flyway fresh/upgrade verification completed. No shared database touched.'
+")"
+  test "$versions" = 26:26 || {
+    echo 'FAIL: recovered V26 Flyway history incomplete'; exit 1;
+  }
+  echo 'PASS: V26 garage/history custom-format archive restored, 33 table counts and 26 history match'
+}
+
 echo '=== Fresh install V1-V26 ==='
 flyway fresh latest
 verify_count fresh
