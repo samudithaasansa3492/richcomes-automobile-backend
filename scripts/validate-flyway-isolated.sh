@@ -114,9 +114,9 @@ flyway() {
 verify_count() {
   local db="$1" count
   count="$(docker exec "$CONTAINER" psql -U postgres -d "richcomes_${db}" -Atc \
-    "SELECT COUNT(*) FROM public.flyway_schema_history WHERE success AND version ~ '^[0-9]+$' AND version::int BETWEEN 1 AND 23")"
-  test "$count" = 23 || { echo "FAIL: ${db} migration count=${count}"; exit 1; }
-  echo "PASS: ${db} contains 23 successful Flyway migrations"
+    "SELECT COUNT(*) FROM public.flyway_schema_history WHERE success AND version ~ '^[0-9]+$' AND version::int BETWEEN 1 AND 26")"
+  test "$count" = 26 || { echo "FAIL: ${db} migration count=${count}"; exit 1; }
+  echo "PASS: ${db} contains 26 successful Flyway migrations"
 }
 
 verify_customer_security() {
@@ -231,14 +231,14 @@ verify_isolated_backup_roundtrip() {
   echo 'PASS: custom-format V14 app schema/history successfully restored on throwaway PostgreSQL'
 }
 
-echo '=== Fresh install V1-V23 ==='
+echo '=== Fresh install V1-V26 ==='
 flyway fresh latest
 verify_count fresh
 verify_customer_security fresh
 verify_business_delegation fresh
 verify_browser_denial fresh
 
-echo '=== Simulate upgrade V1-V14 to V23 ==='
+echo '=== Simulate upgrade V1-V14 to V26 ==='
 flyway upgrade 14
 verify_isolated_backup_roundtrip
 flyway upgrade 18
