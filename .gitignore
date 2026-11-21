@@ -47,3 +47,5 @@ client.private.env.json
 **/richcomes-app-backup-*/
 backups/
 db-backups/
+.local-secrets/
+generate-jwt.jsh
