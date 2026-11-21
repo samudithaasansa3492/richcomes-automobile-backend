@@ -1,6 +1,6 @@
 # Richcomes Spring Boot release — protected container deployment
 
-> **2026-11-21 live state:** connected shared Supabase has **26 successful Flyway migrations** through V26, and the `garage.user_accounts` table exists. V24–V26 scripts on the inventory feature branch match the applied Flyway CRC checksums. Railway backend remains staged and not deployed. A verified full recoverable backup of the **current V26 database** is still missing; do not claim older V14 snapshots protect V26 data. This integration does not provision secrets or launch customer traffic.
+> **2026-11-21 live state:** connected shared Supabase has **26 successful Flyway migrations** through V26, and the `garage.user_accounts` table exists. V24–V26 scripts are merged to `main`, and the applied source Flyway history was verified against current Git. Railway backend remains staged and not deployed. A verified full recoverable backup of the **current V26 database** is still missing; do not claim older V14 snapshots protect V26 data. This integration does not provision secrets or launch customer traffic.
 
 
 **Status as of 21 Nov 2026:** container and readiness code are integrated and tested; **Railway backend is staged only and not deployed**. The shared Supabase database is **V26, with 26 successful applied migrations and 33 `garage` tables**. The user-account table exists but there are **zero live user accounts**. An actual off-site independently restored **current V26** backup, hosted HTTPS URL, dedicated app-role JDBC credentials, protected RSA signing key pair, and approved external SMTP have **not** been verified. The exact current operator procedure is [V26 Production Release](current-v26-production-release.md).
@@ -11,8 +11,8 @@
 - Expose the container HTTP port supplied by the host's `PORT` variable (default 8080). Let a trusted HTTPS reverse proxy / application host terminate TLS. Never publicly expose PostgreSQL or JDBC.
 - Supply **all secrets at runtime via protected host configuration or mounted secret files**, never source, public build logs, copy/pasted commands, or image build arguments.
 - Configure hosting health-check path to `GET /actuator/health/readiness`. It requires a usable database and returns only UP/DOWN, no component details. `GET /actuator/health/liveness` is an independent minimal process-status check. All other Actuator endpoints remain inaccessible without explicit authorization and are not web-exposed.
-- A startup guard refuses the service when required V23 customer-proof columns and single-use INITIAL_PASSWORD challenge constraint are missing, **even if the underlying V14 database connection is healthy**. This prevents inadvertently serving a V23 API on a V14 database.
-- For a hosting provider with an existing Railway account, Railway automatically detects the root Dockerfile and uses its own PORT, and can check `/actuator/health/readiness`. See the official Railway [Dockerfile guide](https://docs.railway.com/builds/dockerfiles) and [health-check guide](https://docs.railway.com/deployments/healthchecks). A private Railway `richcomes-automobile` project and `richcomes-backend` service are **staged** and still have no running deployment or public domain. A separate private Railway backup bucket is provisioned, but it contains no verified Supabase archive. See [off-site backup operator guide](railway-private-offsite-backup.md).
+- A startup guard refuses the service if required customer-proof identity columns or the single-use INITIAL_PASSWORD challenge constraint are missing, even when a database connection works. Verify the deployed application against the already-applied **V26 schema**.
+- For a hosting provider with an existing Railway account, Railway automatically detects the root Dockerfile and uses its own PORT, and can check `/actuator/health/readiness`. See the official Railway [Dockerfile guide](https://docs.railway.com/builds/dockerfiles) and [health-check guide](https://docs.railway.com/deployments/healthchecks). A private Railway `richcomes-automobile` project and `richcomes-backend` service are **staged** and still have no running deployment or public domain. A separate private Railway backup bucket is provisioned, but it contains no verified Supabase archive. See the [current V26 off-site backup operator guide](current-v26-production-release.md), not the historical V14 guide.
 
 > **Railway staged patch inspection (2026-11-19):** the already-live backup bucket is `richcomes-offsite-backups-live` (S3 API name `functional-locker-mh5j-coszp`). Railway currently also retains an **unneeded staged-create bucket** from the earlier draft in its pending environment patch. Do **not** commit the entire pending environment patch until the duplicate staged-only bucket has been discarded through Railway Dashboard and all required DB/JWT secrets are configured. The connected resource tools could not cancel this staged-only bucket; a failed attempt did not provision it. Commit only an explicitly reviewed application patch, never duplicate buckets or an unready service.
 
@@ -32,10 +32,10 @@ See [environment example](../.env.example) for **names only**. In particular:
 
 | Config | Requirement |
 | --- | --- |
-| `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | real target; restricted user; TLS; configured only after migrations/restore test |
+| `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | V26 source; dedicated restricted app role; JDBC TLS; configured after a **real V26** independently verified backup |
 | `JWT_ISSUER`, `JWT_AUDIENCE` | issuer/audience matching signed JWT claims; no hardcoded development values |
 | `JWT_PUBLIC_KEY_PEM_BASE64`, `JWT_PRIVATE_KEY_PEM_BASE64` | Railway protected variable values containing complete, matching base64-encoded PEM keys; never reveal secrets. Alternatively use mounted key file paths. |
-| `FLYWAY_ENABLED` | `false` for normal service; separate one-time migration operator |
+| `FLYWAY_ENABLED` | `false` for all hosted application services; V1–V26 is already applied, never replay it |
 | `CUSTOMER_ONBOARDING_ENABLED` | `false` until real proofing/email/live validation approved |
 | `APP_RECOVERY_ENABLED` | `false` until TLS SMTP and approved same-origin HTTPS tested |
 | `PORT` | provider-defined; default 8080 |
