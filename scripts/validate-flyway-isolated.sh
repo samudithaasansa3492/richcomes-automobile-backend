@@ -245,12 +245,37 @@ verify_isolated_backup_roundtrip() {
   echo 'PASS: custom-format V14 app schema/history successfully restored on throwaway PostgreSQL'
 }
 
+verify_inventory_v26() {
+  local db="$1" ok
+  ok="$(docker exec "$CONTAINER" psql -U postgres -d "richcomes_${db}" -qAt -v ON_ERROR_STOP=1 -c "
+    SELECT
+      to_regclass('garage.store_locations') IS NOT NULL
+      AND to_regclass('garage.store_stock_balances') IS NOT NULL
+      AND to_regclass('garage.grn_item_allocations') IS NOT NULL
+      AND EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema='garage' AND table_name='service_job_parts'
+          AND column_name='store_location_id'
+      )
+      AND (SELECT COUNT(*) FROM garage.permissions
+           WHERE code IN ('inventory:grn:confirm','inventory:grn:cancel','inventory:stock:adjust'))=3
+      AND (SELECT COUNT(*) FROM garage.role_permissions rp
+           JOIN garage.roles r ON r.id=rp.role_id
+           JOIN garage.permissions p ON p.id=rp.permission_id
+           WHERE r.code='OWNER' AND
+             p.code IN ('inventory:grn:confirm','inventory:grn:cancel','inventory:stock:adjust'))=3
+  ")"
+  test "$ok" = t || { echo "FAIL: ${db} V24-V26 inventory tables/permissions missing"; exit 1; }
+  echo "PASS: ${db} V24-V26 multi-store tables, service-part location and OWNER permissions"
+}
+
 echo '=== Fresh install V1-V26 ==='
 flyway fresh latest
 verify_count fresh
 verify_customer_security fresh
 verify_business_delegation fresh
 verify_browser_denial fresh
+verify_inventory_v26 fresh
 
 echo '=== Simulate upgrade V1-V14 to V26 ==='
 flyway upgrade 14
@@ -278,6 +303,7 @@ verify_count upgrade
 verify_customer_security upgrade
 verify_business_delegation upgrade
 verify_browser_denial upgrade
+verify_inventory_v26 upgrade
 owner_count="$(docker exec "$CONTAINER" psql -U postgres -d richcomes_upgrade -Atc \
   "SELECT count(*) FROM garage.user_accounts a JOIN garage.user_account_roles ar ON ar.user_account_id=a.id JOIN garage.roles r ON r.id=ar.role_id JOIN garage.employees e ON e.id=a.employee_id WHERE a.username='validation.owner' AND a.enabled AND a.identity_kind='BUSINESS' AND r.code='OWNER' AND e.position='OWNER'")"
 test "$owner_count" = 1 || { echo 'FAIL: synthetic legacy OWNER was not preserved'; exit 1; }
