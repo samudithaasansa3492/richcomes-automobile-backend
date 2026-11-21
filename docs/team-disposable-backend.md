@@ -1,6 +1,6 @@
 # Team members: run backend now, without waiting for shared Supabase
 
-**Use only for local development or a private Codespace.** This setup never contacts the shared Supabase project, does not require Railway, and needs no real customer records. The target is an independent throwaway PostgreSQL 17 + Java 21 backend on localhost, migrated V1–V23 automatically. **Do not use for production or publish port 18080 publicly**.
+**Use only for local development or a private Codespace.** This setup never contacts the shared Supabase project, does not require Railway, and needs no real customer records. The target is an independent throwaway PostgreSQL 17 + Java 21 backend on localhost, migrated V1–V26 automatically. **Do not use for production or publish port 18080 publicly**.
 
 ## Start (one command)
 
@@ -12,7 +12,7 @@ bash scripts/team-dev.sh up
 bash scripts/team-dev.sh verify
 ```
 
-Expected output: readiness UP, 23 successful migrations and private database port. The service can be reached **from that same machine / Codespace** at:
+Expected output: readiness UP, 26 successful migrations and private database port. The service can be reached **from that same machine / Codespace** at:
 
 - API health: `http://127.0.0.1:18080/actuator/health/readiness`
 - Swagger: `http://127.0.0.1:18080/swagger-ui/index.html`
@@ -36,7 +36,7 @@ bash scripts/team-dev.sh status
 bash scripts/team-dev.sh down
 ```
 
-`down` destroys all disposable database content and the synthetic key files. The next `up` starts an empty DB and re-applies V1–V23. To select another local HTTP port, set `RICHCOMES_TEAM_PORT` (4–5 digits), e.g.:
+`down` destroys all disposable database content and the synthetic key files. The next `up` starts an empty DB and re-applies V1–V26. To select another local HTTP port, set `RICHCOMES_TEAM_PORT` (4–5 digits), e.g.:
 
 ```bash
 RICHCOMES_TEAM_PORT=18081 bash scripts/team-dev.sh up
