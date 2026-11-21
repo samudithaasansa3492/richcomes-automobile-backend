@@ -1,50 +1,77 @@
-# Member 1 authentication and employee backend — handover
+# Member 1 — final backend handover (code/test scope, 21 Nov 2026)
 
-**Checkpoint:** 2026-11-18, merged `main` after PR #40; [GitHub repository](https://github.com/samudithaasansa3492/richcomes-automobile-backend). **Status:** implementation integrated and isolated CI passing; shared dev/production deployment **not** complete. This evidence covers Member 1 backend, not a certification of every team module.
+**Current reference:** `main` after [PR #55](https://github.com/samudithaasansa3492/richcomes-automobile-backend/pull/55), merge `aa80501546d869cac6975b961076f70c922371ca`. **Engineering status:** authentication, employee management, role and account backend code delivered and independently tested in disposable Java 21/PostgreSQL. **Production deployment is NOT complete or certified.** Do not conflate a verified development backend with live Railway hosting.
 
-## Delivered components
+## What this team member can hand over now
 
-- Employee operations, user account lifecycle, active-owner protection and technical/OWNER/CASHIER separation.
-- RS256 Bearer JWT login and `/api/auth/me`; current DB account status and effective permissions reloaded per authenticated request (no trust of stale permission claims).
-- Roles/permission seed and per-CASHIER business authorization with conservative OWNER-only defaults for financial/customer/sensitive messaging operations.
-- Customer login identity restricted to own profile, disabled enrollment, recorded verification attestation, 15-minute single-use customer-chosen password, separate OWNER activation, and fail-closed suspension/email-change checks.
-- First-party same-origin `/account-setup.html` + JS/CSS supporting initial password, password reset and recovery email confirmation; HTTPS and SMTP deployment still required.
-- Isolated PostgreSQL 17 Flyway V1–V23 fresh and V14→V23 upgrade checks; shared database RLS hardening of public migration history; V14 application backup/restore rehearsal tooling.
+- Employee CRUD: list, get by UUID, create, update and deactivate; secured by `employee:*` permissions and self/last-owner protections for sensitive operations.
+- UserAccount CRUD/lifecycle: create disabled accounts, list, replace OWNER/CASHIER role assignments, enable/disable, protect last enabled OWNER; credentials stored as BCrypt, never readable from API.
+- Custom Spring Security **RS256 JWT** (not Supabase Auth): username/password login, 15-minute bearer token, `/api/auth/me`; authentication refreshes current account state and permissions from the database. It denies disabled staff, ineligible technicians, unverified customers and improperly linked roles.
+- Role/permission seeds: `OWNER`, `CASHIER`, `ADMIN` (technical only), `CUSTOMER`; 45 permission definitions observed in shared V26. CASHIER defaults to no blanket business role grants and receives only explicitly owner-delegated scoped permissions.
+- Secure first-OWNER operator procedure; technical ADMIN kept separate from business OWNER. Customer recovery/initial-password support is code-integrated, but live mail/identity-verification operations remain OFF.
+- **Team unblocker:** private throwaway Compose PostgreSQL V26 + automatic local RSA PEM pair and one-command synthetic `test.owner`/`test.cashier` creation. No real Supabase account or permanent default password is created.
 
-## Validation evidence (exact source and scope)
+## Fast IntelliJ IDEA / Postman demo (no shared database)
 
-- [PR #40 Java 21 / PostgreSQL / Flyway CI](https://github.com/samudithaasansa3492/richcomes-automobile-backend/actions/runs/44246030363): 277 selected tests with 0 failures, plus 5 full-context Spring Boot/PostgreSQL tests with 0 failures; JavaScript first-party recovery form tests PASS.
-- Disposable PostgreSQL: V1–V23 fresh, V14→V23 upgrade and role/security constraints PASS. A separate V14 custom-format `garage` schema + public history snapshot was successfully restored into an isolated throwaway PostgreSQL DB with expected row counts.
-- Both fresh and upgrade CI require `anon`/`authenticated` to have no direct `garage` schema/table privileges. This test does not establish a real Supabase deployment.
-- Shared Supabase `richcomes-automobile-dev` **still at V14**: public Flyway history RLS ON, browser SELECT denied, 14 successful migrations; `garage.user_accounts` absent. No V15–V23 migration or customer onboarding enablement was performed there.
-- `FLYWAY_ENABLED=false` and `CUSTOMER_ONBOARDING_ENABLED=false` are default fail-closed settings. Organization Free tier lacks verified scheduled backups, and there is **no independently retrieved off-site backup/restore evidence yet**.
+Prerequisites: local Git clone on current `main`; Docker Engine + Compose v2; OpenSSL, curl, Python 3; Git Bash or WSL/Linux terminal. Execute from the project directory in a **clean checkout without a real `.env`**:
 
-## API/role demo checklist (isolated environment with synthetic accounts only)
+```bash
+git switch main
+git pull --ff-only origin main
+bash scripts/team-dev.sh up
+bash scripts/team-dev.sh verify
+bash scripts/seed-team-dev-accounts.sh create
+```
 
-1. Build with Java 21: `./mvnw clean test` in an isolated test configuration only; use `scripts/validate-spring-context-isolated.sh` and `scripts/validate-flyway-isolated.sh` with Docker where applicable, **not real shared DB credentials**.
-2. Seed OWNER/CASHIER/CUSTOMER in a disposable database. The first OWNER provisioning command must be separately operated and its password entered privately; read [first-admin-provisioning.md](first-admin-provisioning.md).
-3. Login: `POST /api/auth/login` with synthetic username/password; inspect expiration, signature and generic failure errors, then `GET /api/auth/me` with `Authorization: Bearer <token>`.
-4. Employee endpoints: OWNER with `employee:read/create/update/deactivate` may use `GET /api/employees`, `POST /api/employees`, `PUT /api/employees/{id}`, and `PATCH /api/employees/{id}/deactivate`; demonstrate denied actions without authority, self-change and last-owner protection.
-5. Account operations: `POST /api/accounts`, `GET /api/accounts`, `PUT /api/accounts/{id}/roles`, `PATCH /api/accounts/{id}/enable|disable` are governed by named permissions and active-owner safeguards. Never expose password hashes.
-6. Per-CASHIER delegation: OWNER grants exact allowed direct permission; show CASHIER denied for unapproved access and immediately denied again following revoke even with the same previously issued JWT.
-7. Customer (only when explicitly enabled in **isolated** setup): staff registers a disabled existing active Customer; OWNER records a valid synthetic verification case and sends a synthetic invitation through a fake SMTP sink; customer completes `/account-setup.html` first password; OWNER activates; CUSTOMER can only read own `/api/customer/me`. Suspended/no-proof/email-changed accounts must fail.
-8. Recovery: simulate reset/verify-email with single-use purpose-bound tokens, expired/replayed tokens and generic failure responses. Never send real customer messages from isolated CI.
-9. Record the specific commit, tests, time, environment, reviewer and demonstration result in the team's acceptance notes.
+The script prints PASS only after two real local JWT logins succeed, OWNER's `GET /api/employees` returns **200**, and CASHIER's same request returns **403**. Run `bash scripts/seed-team-dev-accounts.sh verify` to rerun. Username pair: `test.owner` and `test.cashier`. Each user's **random** password is generated and kept privately under `$HOME/.local/state/richcomes-team-dev/test-user-logins.txt` with mode 0600; to see only on the owning workstation run `cat "$HOME/.local/state/richcomes-team-dev/test-user-logins.txt"`. Do not send this file or tokens in chat.
 
-## Typical failures
+- Health: `GET http://127.0.0.1:18080/actuator/health/readiness`
+- Login: `POST http://127.0.0.1:18080/api/auth/login`, JSON `{"username":"test.owner","password":"<your-local-password>"}`
+- Current identity: `GET http://127.0.0.1:18080/api/auth/me` with `Authorization: Bearer <accessToken>`
+- Employees: `GET http://127.0.0.1:18080/api/employees` with same bearer header
+- Account metadata: `GET http://127.0.0.1:18080/api/accounts` with OWNER bearer header
+- Access-denial demo: login as `test.cashier` and repeat employee GET — expected 403 (not a backend crash).
 
-- `400 INVALID_REQUEST`: malformed input (including username/password constraints).
-- `401`: missing, expired, invalid or revoked JWT (authentication).
-- `403`: valid identity lacks permission, attempts protected self-change, or tries disallowed role/status operation.
-- `404`: requested employee/account/customer record absent.
-- `409`: conflicting account, last-owner guard or customer not eligible for lifecycle transition.
-- `503`: backend/database/role unavailable or customer onboarding deliberately switched OFF. Recovery token failures intentionally use a generic response; do not treat error bodies as authentication details.
+For employee creation/update request field constraints and account request/response examples, use [account-management.md](account-management.md), [EmployeeController](../src/main/java/com/richcomes/garage/employee/controller/EmployeeController.java) and Swagger/OpenAPI where enabled. The HTTP app runs in **Docker**, not under IntelliJ's JVM debugger. For stepping through local Java code in the IDE, configure a separately approved **local-only** PostgreSQL database and private RSA pair; never point an IDE `FLYWAY_ENABLED=true` configuration at shared Supabase.
 
-## Outstanding release work (not claimed as completed)
+At the end: `bash scripts/team-dev.sh down` destroys local tmpfs database, fixture users, random credentials and throwaway RSA PEM keys.
 
-- [Issue #34](https://github.com/samudithaasansa3492/richcomes-automobile-backend/issues/34): verified real Free-tier backup/restore, V12–V14 checksum comparison, migration V15–V23 release window, source/target validation and post-deployment security checks.
-- [Issue #32](https://github.com/samudithaasansa3492/richcomes-automobile-backend/issues/32): actually approved ID proofing SOP/evidence custody, configured HTTPS domain and TLS SMTP provider, functional live first-login and support processes.
-- [Issue #33](https://github.com/samudithaasansa3492/richcomes-automobile-backend/issues/33): module owners validate cashier allowlist, scoped PII, destructive actions, notification consent/provider safeguards.
-- University assessment rubric, if supplied, must be checked separately for extra required APIs (e.g. refresh token), rather than expanding scope without confirmation.
+## First production/business OWNER is a different procedure
 
-See [account-management.md](account-management.md), [verified customer onboarding](verified-customer-onboarding.md), [physical identity SOP](customer-identity-proofing-operations.md), and [backup runbook](shared-supabase-backup-restore.md).
+Do **not** create a first business OWNER by running the test fixture against shared Supabase or copying `test.owner`. Use the [explicit first-OWNER operator CLI](first-admin-provisioning.md) with an approved active non-technician Employee, owner-approved username, protected password and the correct actual database after full backup/recovery readiness. This command needs a trusted operator, interactive terminal, one-time setup and review; it never runs on normal application startup.
+
+## API inventory and common security outcomes
+
+| Route | Authentication or authority | Expected behavior |
+| --- | --- | --- |
+| `POST /api/auth/login` | Public | 200 and short-lived RS256 bearer token for valid enabled identity; invalid credentials 401 |
+| `GET /api/auth/me` | Authenticated | 200 account identity, current roles and effective permissions; no token/hash |
+| `GET /api/employees`, `GET /api/employees/{id}` | `employee:read` | 200 for OWNER / approved explicit grantee, 403 for unprivileged CASHIER |
+| `POST /api/employees` | `employee:create` | 201 for accepted employee request |
+| `PUT /api/employees/{id}` | `employee:update` | 200 for accepted edit |
+| `PATCH /api/employees/{id}/deactivate` | `employee:deactivate` | Guarded against deactivating account owner/self and last active OWNER |
+| `GET /api/accounts`, `GET /api/accounts/{id}` | `account:read` | Owner-view account metadata only |
+| `POST /api/accounts` | `account:create` | Creates **disabled** account, not an automatic enabled login |
+| `PUT /api/accounts/{id}/roles` | `account:manage` | Only supported business role assignments; cannot promote technical ADMIN |
+| `PATCH /api/accounts/{id}/enable`, `.../disable` | `account:manage` | Owner-guarded account lifecycle |
+
+General error semantics: 400 invalid request, 401 missing/invalid/expired JWT or bad login credentials, 403 valid token without required permission, 404 unknown resource, 409 conflicting state or last active OWNER protection, 503 missing essential DB/role or deliberately disabled enrollment. Failed login does not reveal whether username exists. Do not disable auth for frontend test compatibility.
+
+## Audited test evidence
+
+- [Merged PR #55 / exact-head CI run 44878947192](https://github.com/samudithaasansa3492/richcomes-automobile-backend/actions/runs/44878947192): **317 Java regression tests passed (0 failures)**; **6 Spring Boot / isolated PostgreSQL tests passed**; isolated Flyway **V1–V26** and V14→V26 upgrade; Docker Java 21 build; live Compose backend readiness UP and **real synthetic OWNER/CASHIER JWT login + 200/403 permission smoke**.
+- [Merged PR #53 inventory V26 integration](https://github.com/samudithaasansa3492/richcomes-automobile-backend/pull/53) and [PR #54 V26 backup tooling](https://github.com/samudithaasansa3492/richcomes-automobile-backend/pull/54) passed independently; their synthetic restoration is **not** a real shared Supabase backup.
+- Read-only Supabase check (21 Nov 2026): **26 successful Flyway migrations**, `garage.roles` contains **4 roles**, `garage.permissions` **45 definitions**, and `garage.user_accounts` **0 records**. The shared database does not contain the disposable test users, by design.
+- Do not claim every possible business flow or whole-team acceptance was reviewed solely on this evidence.
+
+## Exact handover acceptance (code versus release)
+
+**Code/demo readiness:** All Member 1 API routes and local testing procedure are provided in the repo; isolated Java, PostgreSQL, JWT and access-guard CI are green. Teammates can immediately test modules using a private V26 backend and locally seeded test identities.
+
+**Still needing business or release decisions:**
+1. Actual university assignment rubric review, including whether **refresh tokens, extra role-management endpoints or other specified deliverables** are required. No such requirement has been confirmed from the project context, so this document does not claim rubric acceptance.
+2. [Module-owner permission sign-off (#33)](https://github.com/samudithaasansa3492/richcomes-automobile-backend/issues/33): exact CASHIER workflows/PII/destructive actions/provider messaging. Code intentionally keeps unapproved operations deny-by-default.
+3. [Customer proofing & SMTP/HTTPS operational approval (#32)](https://github.com/samudithaasansa3492/richcomes-automobile-backend/issues/32): live identity evidence custody and customer-owned email setup; keep customer onboarding OFF.
+4. [Actual V26 off-site backup and Railway release (#34)](https://github.com/samudithaasansa3492/richcomes-automobile-backend/issues/34): privately held DB/S3 credentials, independently retrieved/decrypted backup and verified restore; dedicated runtime DB role/TLS, JWT private signing key and production deployment/health checks. Railway still **staged and has no public API** at this checkpoint.
+
+**Decision requested of the team:** accept the **Member 1 code/API/testing handover** based on the above evidence, or identify a precise missing rubric acceptance criterion; separately own and approve the production rollout. Do not keep all teammates blocked solely because the production host has not yet received secrets and recovery approval.
