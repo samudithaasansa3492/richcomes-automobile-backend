@@ -1,5 +1,8 @@
 # Shared V14 database backup & restore release gate
 
+> **STOP: HISTORICAL V14-ONLY PROCEDURE (observed 2026-11-21).** The linked shared Supabase database has since advanced to V26, with 26 successful migrations. This V14 script intentionally stops on the new schema and must NOT be used as proof of source recoverability. Before Railway production deploy, use a separately reviewed **V26-compatible full source backup/export and independent restore procedure** covering all existing application and applicable Supabase-managed resources. Do not patch out version checks to force the V14-only procedure to run on V26. No verified current off-site backup exists in the connected tools.
+
+
 **Status (2026-11-18): NOT executed on the shared database.** The connected Supabase organization is on Free; scheduled daily backup and PITR were not verified. Flyway V15–V23 remain **unapplied** to `richcomes-automobile-dev`, and onboarding must remain OFF. Do not interpret GitHub CI or a GitHub repo commit as a verified backup.
 
 ## Read-only V14 checksum preflight (verified 2026-11-19)
