@@ -1,5 +1,8 @@
 # Supabase Free-tier recovery — private Railway off-site archive
 
+> **STOP: V14 archive workflow is obsolete for the live source (2026-11-21).** Shared Supabase has moved to V26. The scripts below remain intentionally gated to pre-V15 V14 backup artifacts; they are not suitable for the current database. Use them only for previously collected and independently verified historical V14 archives. Current release requires a new reviewed V26 snapshot/export and independent off-site restore with all newly added store tables and managed resources included. No live Railway service has been deployed.
+
+
 **Release gate remains OPEN until an independently recovered real snapshot is proven.**
 This guide is an operator workflow, not a claim that a real customer database backup was performed. A Railway project named `richcomes-automobile` exists. A **private Railway S3 backup bucket is now provisioned and LIVE**, separate from the staged application. Railway display name: `richcomes-offsite-backups-live`; actual S3 bucket name: `functional-locker-mh5j-coszp`; endpoint: `https://t3.storageapi.dev`; region: `auto`; addressing style: virtual host. These non-secret settings were read back from the Railway bucket connection. **Credentials were redacted by OAuth** and must be entered privately by an authorized operator. The application service remains STAGED/unlaunched; do not accept the entire Railway pending patch merely for the bucket. No real Supabase archive has been uploaded.
 
