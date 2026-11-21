@@ -1,5 +1,8 @@
 # Richcomes Spring Boot release — protected container deployment
 
+> **Live environment verification (2026-11-21):** shared Supabase `richcomes-automobile-dev` now reports **26 successful Flyway migrations, V1–V26** and includes `garage.user_accounts`. These were applied outside this deployment workflow. V24, V25 and V26 applied script checksums match the `feature/inventory-management` branch sources; GitHub `main` previously had only V1–V23. This integration PR must pass full isolated fresh/upgrade tests before release. The existing V14-only backup scripts must **NOT** be run or represented as backups of the now-V26 shared database. There is still no independently verified encrypted, recoverable off-site backup and no live Railway backend deployment.
+
+
 **Status:** container and readiness code is integrated/tested in GitHub, but the *actual hosted service is not yet deployed*. The connected shared Supabase project is a Free-tier dev project at V14; this API release requires V23. No actual off-site recovery backup, approved external SMTP sender, hosted HTTPS origin, or private RSA key mount has been verified yet.
 
 ## Target architecture
