@@ -65,8 +65,8 @@ INSERT INTO garage.user_accounts(employee_id,username,password_hash,enabled,iden
 SELECT e.id,
        CASE e.employee_code WHEN 'TEST-OWNER-LOCAL' THEN 'test.owner' ELSE 'test.cashier' END,
        CASE e.employee_code WHEN 'TEST-OWNER-LOCAL'
-            THEN crypt('$owner_password', gen_salt('bf',12))
-            ELSE crypt('$cashier_password',gen_salt('bf',12)) END,
+            THEN '{bcrypt}' || crypt('$owner_password', gen_salt('bf',12))
+            ELSE '{bcrypt}' || crypt('$cashier_password',gen_salt('bf',12)) END,
        TRUE,'BUSINESS'
 FROM garage.employees e
 WHERE e.employee_code IN ('TEST-OWNER-LOCAL','TEST-CASHIER-LOCAL');
