@@ -1,33 +1,79 @@
+
 package com.richcomes.garage.service.dto;
 
 import java.math.BigDecimal;
 
 public class ServiceJobPartDTO {
+
     private Long id;
     private Long serviceJobId;
     private Long partId;
+
+    // Store from which this part is issued.
+    private Long storeLocationId;
+
+    // Keep Double for compatibility with Member 3's existing code.
     private Double quantity;
+
     private BigDecimal unitPrice;
     private BigDecimal totalAmount;
 
-    public ServiceJobPartDTO() {}
+    public ServiceJobPartDTO() {
+    }
 
-    // Getters and Setters
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public Long getId() {
+        return id;
+    }
 
-    public Long getServiceJobId() { return serviceJobId; }
-    public void setServiceJobId(Long serviceJobId) { this.serviceJobId = serviceJobId; }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public Long getPartId() { return partId; }
-    public void setPartId(Long partId) { this.partId = partId; }
+    public Long getServiceJobId() {
+        return serviceJobId;
+    }
 
-    public Double getQuantity() { return quantity; }
-    public void setQuantity(Double quantity) { this.quantity = quantity; }
+    public void setServiceJobId(Long serviceJobId) {
+        this.serviceJobId = serviceJobId;
+    }
 
-    public BigDecimal getUnitPrice() { return unitPrice; }
-    public void setUnitPrice(BigDecimal unitPrice) { this.unitPrice = unitPrice; }
+    public Long getPartId() {
+        return partId;
+    }
 
-    public BigDecimal getTotalAmount() { return totalAmount; }
-    public void setTotalAmount(BigDecimal totalAmount) { this.totalAmount = totalAmount; }
+    public void setPartId(Long partId) {
+        this.partId = partId;
+    }
+
+    public Long getStoreLocationId() {
+        return storeLocationId;
+    }
+
+    public void setStoreLocationId(Long storeLocationId) {
+        this.storeLocationId = storeLocationId;
+    }
+
+    public Double getQuantity() {
+        return quantity;
+    }
+
+    public void setQuantity(Double quantity) {
+        this.quantity = quantity;
+    }
+
+    public BigDecimal getUnitPrice() {
+        return unitPrice;
+    }
+
+    public void setUnitPrice(BigDecimal unitPrice) {
+        this.unitPrice = unitPrice;
+    }
+
+    public BigDecimal getTotalAmount() {
+        return totalAmount;
+    }
+
+    public void setTotalAmount(BigDecimal totalAmount) {
+        this.totalAmount = totalAmount;
+    }
 }

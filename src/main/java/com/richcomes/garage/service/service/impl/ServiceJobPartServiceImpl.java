@@ -1,6 +1,9 @@
-
 package com.richcomes.garage.service.service.impl;
 
+import com.richcomes.garage.inventory.store.entity.StoreLocation;
+import com.richcomes.garage.inventory.store.entity.StoreStockBalance;
+import com.richcomes.garage.inventory.store.repository.StoreLocationRepository;
+import com.richcomes.garage.inventory.store.repository.StoreStockBalanceRepository;
 import com.richcomes.garage.inventory.stockitem.entity.StockItem;
 import com.richcomes.garage.inventory.stockitem.repository.StockItemRepository;
 import com.richcomes.garage.inventory.stockmovement.entity.StockTransaction;
@@ -38,6 +41,8 @@ public class ServiceJobPartServiceImpl
     private final ServiceJobRepository jobRepository;
     private final StockItemRepository stockItemRepository;
     private final StockTransactionRepository transactionRepository;
+    private final StoreLocationRepository storeLocationRepository;
+    private final StoreStockBalanceRepository storeStockBalanceRepository;
 
     @PersistenceContext
     private EntityManager entityManager;
@@ -47,12 +52,16 @@ public class ServiceJobPartServiceImpl
             ServiceJobPartRepository repository,
             ServiceJobRepository jobRepository,
             StockItemRepository stockItemRepository,
-            StockTransactionRepository transactionRepository) {
+            StockTransactionRepository transactionRepository,
+            StoreLocationRepository storeLocationRepository,
+            StoreStockBalanceRepository storeStockBalanceRepository) {
 
         this.repository = repository;
         this.jobRepository = jobRepository;
         this.stockItemRepository = stockItemRepository;
         this.transactionRepository = transactionRepository;
+        this.storeLocationRepository = storeLocationRepository;
+        this.storeStockBalanceRepository = storeStockBalanceRepository;
     }
 
     // ENTITY TO DTO
@@ -70,6 +79,9 @@ public class ServiceJobPartServiceImpl
         }
 
         dto.setPartId(entity.getPartId());
+        if (entity.getStoreLocation() != null) {
+            dto.setStoreLocationId(entity.getStoreLocation().getId());
+        }
         dto.setQuantity(entity.getQuantity());
         dto.setUnitPrice(entity.getUnitPrice());
         dto.setTotalAmount(entity.getTotalAmount());
@@ -99,6 +111,7 @@ public class ServiceJobPartServiceImpl
         }
 
         entity.setPartId(dto.getPartId());
+        // Store is assigned by addJobPart after validating the selected store.
         entity.setQuantity(dto.getQuantity());
         entity.setUnitPrice(dto.getUnitPrice());
         entity.setTotalAmount(dto.getTotalAmount());
@@ -195,12 +208,14 @@ public class ServiceJobPartServiceImpl
         if (jobPartDTO == null
                 || jobPartDTO.getServiceJobId() == null
                 || jobPartDTO.getPartId() == null
+                || jobPartDTO.getStoreLocationId() == null
                 || jobPartDTO.getServiceJobId() <= 0
-                || jobPartDTO.getPartId() <= 0) {
+                || jobPartDTO.getPartId() <= 0
+                || jobPartDTO.getStoreLocationId() <= 0) {
 
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Valid job ID and part ID are required"
+                    "Valid job ID, part ID and store location ID are required"
             );
         }
 
@@ -268,13 +283,49 @@ public class ServiceJobPartServiceImpl
             );
         }
 
+        // Lock global stock item first, then store balance (same ordering as GRN).
+        Long storeId = jobPartDTO.getStoreLocationId();
+        StoreLocation store = storeLocationRepository.findById(storeId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Store location not found"));
+        if (!store.isActive()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Cannot issue parts from an inactive store");
+        }
+
+        // Never create a missing store balance here: a store without stock cannot issue it.
+        StoreStockBalance balance = storeStockBalanceRepository
+                .findForUpdate(storeId, stockItem.getId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST, "Insufficient stock in selected store"));
+        BigDecimal storeBefore = balance.getQuantity();
+        if (storeBefore == null || storeBefore.compareTo(ZERO) < 0
+                || !fitsQuantityColumn(storeBefore)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "Invalid selected store stock balance");
+        }
+        if ("PCS".equals(stockItem.getUnit())
+                && storeBefore.stripTrailingZeros().scale() > 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "PCS item has fractional store stock");
+        }
+        if (storeBefore.compareTo(quantity) < 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Insufficient stock in selected store. Available: "
+                    + storeBefore.toPlainString());
+        }
+        BigDecimal storeAfter = storeBefore.subtract(quantity);
         BigDecimal after = before.subtract(quantity);
 
         ServiceJobPart entity =
                 convertToEntity(jobPartDTO);
 
+        entity.setStoreLocation(store);
         ServiceJobPart saved =
                 repository.saveAndFlush(entity);
+
+        balance.setQuantity(storeAfter);
+        storeStockBalanceRepository.saveAndFlush(balance);
 
         stockItem.setCurrentQuantity(after);
         stockItemRepository.saveAndFlush(stockItem);
@@ -356,6 +407,14 @@ public class ServiceJobPartServiceImpl
         BigDecimal quantity =
                 validateQuantity(jobPart.getQuantity());
 
+        if (jobPart.getStoreLocation() == null
+                || jobPart.getStoreLocation().getId() == null) {
+            // Legacy job parts have no known source store. Never guess where to restore.
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "This job part has no recorded source store; manual reconciliation required");
+        }
+
         StockItem stockItem = stockItemRepository
                 .findByIdForUpdate(jobPart.getPartId())
                 .orElseThrow(() ->
@@ -400,6 +459,31 @@ public class ServiceJobPartServiceImpl
             );
         }
 
+        Long storeId = jobPart.getStoreLocation().getId();
+        StoreStockBalance balance = storeStockBalanceRepository
+                .findForUpdate(storeId, stockItem.getId())
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Original store balance is missing; manual reconciliation required"));
+        BigDecimal storeBefore = balance.getQuantity();
+        if (storeBefore == null || storeBefore.compareTo(ZERO) < 0
+                || !fitsQuantityColumn(storeBefore)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "Invalid original store stock balance");
+        }
+        if ("PCS".equals(stockItem.getUnit())
+                && storeBefore.stripTrailingZeros().scale() > 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "PCS item has fractional store stock");
+        }
+        BigDecimal storeAfter = storeBefore.add(quantity);
+        if (!fitsQuantityColumn(storeAfter)) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Restored store stock exceeds supported range");
+        }
+
+        balance.setQuantity(storeAfter);
+        storeStockBalanceRepository.saveAndFlush(balance);
         stockItem.setCurrentQuantity(after);
         stockItemRepository.saveAndFlush(stockItem);
 
