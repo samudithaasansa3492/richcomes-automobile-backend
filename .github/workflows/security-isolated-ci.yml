@@ -58,6 +58,12 @@ jobs:
           bash -n scripts/check-shared-flyway-history-readonly.sh
           python3 scripts/test-flyway-history-preflight.py
           bash -n scripts/validate-flyway-isolated.sh
+          bash -n scripts/backup-garage-v26-with-restore-rehearsal.sh
+          bash -n scripts/railway-offsite-v26-backup.sh
+          bash -n scripts/check-shared-flyway-v26-readonly.sh
+          bash -n scripts/test-offsite-v26-backup-guards.sh
+          bash scripts/test-offsite-v26-backup-guards.sh
+          python3 scripts/test-flyway-v26-history-preflight.py
 
       - name: Validate recovery client security flows (no network or secrets)
         shell: bash

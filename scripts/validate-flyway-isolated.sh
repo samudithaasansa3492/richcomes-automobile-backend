@@ -269,6 +269,35 @@ verify_inventory_v26() {
   echo "PASS: ${db} V24-V26 multi-store tables, service-part location and OWNER permissions"
 }
 
+verify_v26_backup_roundtrip() {
+  echo '=== Exercise complete V26 backup restore in disposable PostgreSQL ==='
+  docker exec "$CONTAINER" pg_dump -U postgres -d richcomes_fresh --format=custom \
+    --no-owner --no-acl --schema=garage -f /tmp/garage-v26-ci.dump
+  docker exec "$CONTAINER" pg_dump -U postgres -d richcomes_fresh --format=custom \
+    --no-owner --no-acl --table=public.flyway_schema_history -f /tmp/history-v26-ci.dump
+  docker exec "$CONTAINER" createdb -U postgres richcomes_v26_restore
+  docker exec "$CONTAINER" pg_restore -U postgres -d richcomes_v26_restore \
+    --exit-on-error --no-owner --no-acl /tmp/garage-v26-ci.dump
+  docker exec "$CONTAINER" pg_restore -U postgres -d richcomes_v26_restore \
+    --exit-on-error --no-owner --no-acl /tmp/history-v26-ci.dump
+  docker cp scripts/garage-v26-exact-counts.sql "$CONTAINER:/tmp/garage-v26-exact-counts.sql"
+  local before after versions
+  before="$(docker exec "$CONTAINER" psql -U postgres -d richcomes_fresh -qAt -v ON_ERROR_STOP=1 \
+    -f /tmp/garage-v26-exact-counts.sql)"
+  after="$(docker exec "$CONTAINER" psql -U postgres -d richcomes_v26_restore -qAt -v ON_ERROR_STOP=1 \
+    -f /tmp/garage-v26-exact-counts.sql)"
+  [[ "$before" =~ ^[0-9]+(:[0-9]+){32}$ && "$before" == "$after" ]] || {
+    echo 'FAIL: V26 source and isolated recovered table counts differ'; exit 1;
+  }
+  versions="$(docker exec "$CONTAINER" psql -U postgres -d richcomes_v26_restore -qAt \
+    -c "SELECT COUNT(*)::text || ':' || max(version::int)::text FROM public.flyway_schema_history
+        WHERE success AND version ~ '^[0-9]+$'")"
+  test "$versions" = 26:26 || {
+    echo 'FAIL: recovered V26 Flyway history incomplete'; exit 1;
+  }
+  echo 'PASS: V26 garage/history custom-format archive restored, 33 table counts and 26 history match'
+}
+
 echo '=== Fresh install V1-V26 ==='
 flyway fresh latest
 verify_count fresh
@@ -276,6 +305,7 @@ verify_customer_security fresh
 verify_business_delegation fresh
 verify_browser_denial fresh
 verify_inventory_v26 fresh
+verify_v26_backup_roundtrip
 
 echo '=== Simulate upgrade V1-V14 to V26 ==='
 flyway upgrade 14
