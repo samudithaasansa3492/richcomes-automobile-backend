@@ -1,8 +1,9 @@
 
-        package com.richcomes.garage.auth.config;
+package com.richcomes.garage.auth.config;
 
 import com.richcomes.garage.auth.security.AccountJwtAuthenticationConverter;
 import com.richcomes.garage.auth.security.SecurityErrorHandlers;
+import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -16,9 +17,14 @@ import org.springframework.security.web.SecurityFilterChain;
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
 public class SecurityConfig {
+
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtDecoder decoder,
-                                                   AccountJwtAuthenticationConverter converter, SecurityErrorHandlers errors) throws Exception {
+    public SecurityFilterChain securityFilterChain(
+            HttpSecurity http,
+            JwtDecoder decoder,
+            AccountJwtAuthenticationConverter converter,
+            SecurityErrorHandlers errors) throws Exception {
+
         return http
                 // Bearer-header-only API: no cookie authentication, Basic login or server sessions.
                 .csrf(AbstractHttpConfigurer::disable)
@@ -31,10 +37,15 @@ public class SecurityConfig {
                 .oauth2ResourceServer(resource -> resource.authenticationEntryPoint(errors).accessDeniedHandler(errors)
                         .jwt(jwt -> jwt.decoder(decoder).jwtAuthenticationConverter(converter)))
                 .authorizeHttpRequests(access -> access
+
+                        // Allow internal Spring Boot error dispatches to preserve original HTTP status codes.
+                        .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+
                         // Only non-sensitive liveness/readiness signals may be public.
                         // Health status has no DB URLs, errors or component details.
                         .requestMatchers(HttpMethod.GET, "/actuator/health/liveness",
                                 "/actuator/health/readiness").permitAll()
+
                         // Only these static account-recovery assets are public.
                         // No broader static directory bypass or anonymous business API.
                         .requestMatchers(HttpMethod.GET, "/account-setup.html",
@@ -47,8 +58,10 @@ public class SecurityConfig {
                         .hasAuthority("technical:recovery")
                         .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/customer/me").hasAuthority("customer:self")
+
                         .requestMatchers(HttpMethod.POST, "/api/v1/customers", "/api/customer-accounts")
                         .hasAuthority("customer:register")
+
                         // Customer enrollment is delegatable; activation is NOT.
                         // Require an OWNER principal in addition to the current
                         // server-side customer:register authority (never JWT claims).
@@ -62,6 +75,7 @@ public class SecurityConfig {
                                     && principal.permissions().contains("customer:register");
                             return new org.springframework.security.authorization.AuthorizationDecision(permitted);
                         })
+
                         // Proof attestation and invitation are never CASHIER-delegatable.
                         .requestMatchers(HttpMethod.POST, "/api/customer-accounts/{id}/verify-and-invite")
                         .access((authentication, context) -> {
@@ -73,6 +87,7 @@ public class SecurityConfig {
                                     && principal.permissions().contains("customer:register");
                             return new org.springframework.security.authorization.AuthorizationDecision(permitted);
                         })
+
                         .requestMatchers(HttpMethod.PUT, "/api/accounts/{id}/permissions/customer-registration")
                         .hasAuthority("customer:delegate_register")
                         .requestMatchers(HttpMethod.GET, "/api/v1/customers", "/api/v1/customers/**")
@@ -90,9 +105,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/accounts").hasAuthority("account:create")
                         .requestMatchers(HttpMethod.GET, "/api/accounts", "/api/accounts/{id}")
                         .hasAuthority("account:read")
-                        .requestMatchers(HttpMethod.PUT, "/api/accounts/{id}/roles").hasAuthority("account:manage")
+                        .requestMatchers(HttpMethod.PUT, "/api/accounts/{id}/roles")
+                        .hasAuthority("account:manage")
                         .requestMatchers(HttpMethod.PATCH, "/api/accounts/{id}/enable", "/api/accounts/{id}/disable")
                         .hasAuthority("account:manage")
+
                         // Grant/revoke one listed action for one CASHIER; no blanket role changes.
                         .requestMatchers(HttpMethod.GET, "/api/accounts/{id}/permissions")
                         .hasAuthority("permission:delegate")
@@ -103,22 +120,26 @@ public class SecurityConfig {
                         // and default-deny for unimplemented or future write endpoints.
                         .requestMatchers(HttpMethod.GET, "/api/v1/vehicles", "/api/v1/vehicles/**")
                         .hasAuthority("vehicle:read")
-                        .requestMatchers(HttpMethod.POST, "/api/v1/vehicles").hasAuthority("vehicle:create")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/vehicles")
+                        .hasAuthority("vehicle:create")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/vehicles/{id}")
                         .hasAuthority("vehicle:update")
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/vehicles/{id}/activate",
-                                "/api/v1/vehicles/{id}/deactivate").hasAuthority("vehicle:update")
+                                "/api/v1/vehicles/{id}/deactivate")
+                        .hasAuthority("vehicle:update")
 
                         .requestMatchers(HttpMethod.GET, "/api/v1/appointments", "/api/v1/appointments/**")
                         .hasAuthority("appointment:read")
-                        .requestMatchers(HttpMethod.POST, "/api/v1/appointments").hasAuthority("appointment:create")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/appointments")
+                        .hasAuthority("appointment:create")
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/appointments/{id}/approve",
                                 "/api/v1/appointments/{id}/reject",
                                 "/api/v1/appointments/{id}/complete",
                                 "/api/v1/appointments/{id}/not-completed")
                         .hasAuthority("appointment:manage")
 
-                        .requestMatchers(HttpMethod.GET, "/api/inventory/suppliers", "/api/inventory/suppliers/**",
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/inventory/suppliers", "/api/inventory/suppliers/**",
                                 "/api/inventory/categories", "/api/inventory/categories/**",
                                 "/api/inventory/items", "/api/inventory/items/**",
                                 "/api/inventory/grns", "/api/inventory/grns/**",
@@ -126,6 +147,7 @@ public class SecurityConfig {
                                 "/api/inventory/stores", "/api/inventory/stores/**",
                                 "/api/inventory/stock-transactions", "/api/inventory/stock-transactions/**")
                         .hasAuthority("inventory:read")
+
                         // Sensitive inventory writes require action-specific permissions.
                         .requestMatchers(HttpMethod.POST, "/api/inventory/grns/{id}/confirm")
                         .hasAuthority("inventory:grn:confirm")
@@ -135,7 +157,8 @@ public class SecurityConfig {
                         .hasAuthority("inventory:stock:adjust")
                         .requestMatchers(HttpMethod.POST, "/api/inventory/suppliers",
                                 "/api/inventory/categories", "/api/inventory/items",
-                                "/api/inventory/grns").hasAuthority("inventory:create")
+                                "/api/inventory/grns")
+                        .hasAuthority("inventory:create")
                         .requestMatchers(HttpMethod.PUT, "/api/inventory/suppliers/{id}",
                                 "/api/inventory/categories/{id}", "/api/inventory/items/{id}")
                         .hasAuthority("inventory:update")
@@ -144,9 +167,11 @@ public class SecurityConfig {
                                 "/api/inventory/categories/{id}/activate",
                                 "/api/inventory/categories/{id}/deactivate",
                                 "/api/inventory/items/{id}/activate",
-                                "/api/inventory/items/{id}/deactivate").hasAuthority("inventory:update")
+                                "/api/inventory/items/{id}/deactivate")
+                        .hasAuthority("inventory:update")
 
-                        .requestMatchers(HttpMethod.GET, "/api/service-categories", "/api/service-categories/**",
+                        .requestMatchers(HttpMethod.GET,
+                                "/api/service-categories", "/api/service-categories/**",
                                 "/api/service-items", "/api/service-items/**",
                                 "/api/service-jobs", "/api/service-jobs/**",
                                 "/api/service-job-items", "/api/service-job-items/**",
@@ -177,11 +202,13 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/reports/dashboard",
                                 "/api/v1/reports/operational", "/api/v1/reports/stock",
                                 "/api/v1/reports/financial", "/api/v1/reports/performance",
-                                "/api/v1/reports/comprehensive").hasAuthority("report:read")
+                                "/api/v1/reports/comprehensive")
+                        .hasAuthority("report:read")
 
                         .requestMatchers(HttpMethod.GET, "/api/v1/history", "/api/v1/history/**")
                         .hasAuthority("history:read")
-                        .requestMatchers(HttpMethod.POST, "/api/v1/history").hasAuthority("history:create")
+                        .requestMatchers(HttpMethod.POST, "/api/v1/history")
+                        .hasAuthority("history:create")
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/history/{id}")
                         .hasAuthority("history:update")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/history/{id}")
@@ -190,7 +217,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/reminders", "/api/v1/reminders/**")
                         .hasAuthority("reminder:read")
                         .requestMatchers(HttpMethod.POST, "/api/v1/reminders",
-                                "/api/v1/reminders/generate-from-history").hasAuthority("reminder:create")
+                                "/api/v1/reminders/generate-from-history")
+                        .hasAuthority("reminder:create")
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/reminders/{id}",
                                 "/api/v1/reminders/{id}/send", "/api/v1/reminders/{id}/cancel")
                         .hasAuthority("reminder:manage")
@@ -200,13 +228,15 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/notifications", "/api/v1/notifications/**")
                         .hasAuthority("notification:read")
                         .requestMatchers(HttpMethod.POST, "/api/v1/notifications/send",
-                                "/api/v1/notifications/{id}/retry").hasAuthority("notification:send")
+                                "/api/v1/notifications/{id}/retry")
+                        .hasAuthority("notification:send")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/notifications/{id}")
                         .hasAuthority("notification:delete")
 
                         // Audit read is OWNER-only and deliberately NOT delegatable.
                         .requestMatchers(HttpMethod.GET, "/api/v1/audit-logs", "/api/v1/audit-logs/**")
                         .hasAuthority("audit:read")
+
                         .anyRequest().denyAll())
                 .build();
     }
