@@ -1,6 +1,7 @@
 
 package com.richcomes.garage.notification.service;
 
+import com.richcomes.garage.audit.service.AuditLogService;
 import com.richcomes.garage.notification.dto.NotificationResponse;
 import com.richcomes.garage.notification.dto.NotificationSendRequest;
 import com.richcomes.garage.notification.entity.Notification;
@@ -23,10 +24,13 @@ import java.util.List;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
+    private final AuditLogService auditLogService;
 
     public NotificationService(
-            NotificationRepository notificationRepository) {
+            NotificationRepository notificationRepository,
+            AuditLogService auditLogService) {
         this.notificationRepository = notificationRepository;
+        this.auditLogService = auditLogService;
     }
 
     // CREATE AND QUEUE NOTIFICATION
@@ -104,9 +108,26 @@ public class NotificationService {
             );
         }
 
-        return mapToResponse(
-                notificationRepository.save(notification)
+        Notification saved = notificationRepository.save(notification);
+
+        // Audit: notification creation
+        String newValue = "type=" + saved.getType() +
+                ", channel=" + saved.getChannel() +
+                ", recipient=" + maskRecipient(saved.getRecipient(), saved.getChannel()) +
+                ", status=" + saved.getStatus();
+
+        auditLogService.logEvent(
+                0L, // System actor for automatic creation
+                "CREATE",
+                "NOTIFICATION",
+                saved.getId(),
+                null,
+                newValue,
+                "Notification queued: " + saved.getType() + " via " + saved.getChannel(),
+                null
         );
+
+        return mapToResponse(saved);
     }
 
     // GET ALL NOTIFICATIONS WITH FILTERS AND PAGINATION
@@ -194,6 +215,11 @@ public class NotificationService {
             );
         }
 
+        // Capture old state for audit
+        String oldValue = "status=" + notification.getStatus() +
+                ", failureReason=" + notification.getFailureReason() +
+                ", retryCount=" + notification.getRetryCount();
+
         boolean valid = validateRecipient(
                 notification.getChannel(),
                 notification.getRecipient()
@@ -211,9 +237,25 @@ public class NotificationService {
             );
         }
 
-        return mapToResponse(
-                notificationRepository.save(notification)
+        Notification saved = notificationRepository.save(notification);
+
+        // Audit: notification retry
+        String newValue = "status=" + saved.getStatus() +
+                ", failureReason=" + saved.getFailureReason() +
+                ", retryCount=" + saved.getRetryCount();
+
+        auditLogService.logEvent(
+                0L, // System actor for retry
+                "RETRY",
+                "NOTIFICATION",
+                saved.getId(),
+                oldValue,
+                newValue,
+                "Notification retry attempted",
+                null
         );
+
+        return mapToResponse(saved);
     }
 
     // PRESERVE NOTIFICATION HISTORY
@@ -264,6 +306,17 @@ public class NotificationService {
                 ));
     }
 
+    private String maskRecipient(String recipient, NotificationChannel channel) {
+        if (recipient == null || recipient.length() < 4) return "****";
+        if (channel == NotificationChannel.EMAIL) {
+            int atIndex = recipient.indexOf('@');
+            if (atIndex > 2) {
+                return recipient.substring(0, 2) + "****" + recipient.substring(atIndex);
+            }
+        }
+        return recipient.substring(0, 3) + "****" + recipient.substring(recipient.length() - 1);
+    }
+
     // ENTITY TO RESPONSE DTO
     public NotificationResponse mapToResponse(
             Notification notification) {
@@ -282,6 +335,10 @@ public class NotificationService {
         response.setSentAt(notification.getSentAt());
         response.setFailureReason(notification.getFailureReason());
         response.setCreatedAt(notification.getCreatedAt());
+        response.setUpdatedAt(notification.getUpdatedAt());
+        response.setRetryCount(notification.getRetryCount());
+        response.setNextRetryAt(notification.getNextRetryAt());
+        response.setProviderMessageId(notification.getProviderMessageId());
 
         return response;
     }
