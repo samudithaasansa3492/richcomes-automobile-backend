@@ -30,6 +30,9 @@
   <component name="DBNavigator.Project.DatabasePrerequisiteManager">
     <prerequisites />
   </component>
+  <component name="DBNavigator.Project.ParserDiagnosticsManager">
+    <diagnostics-history />
+  </component>
   <component name="DBNavigator.Project.Settings">
     <states />
     <connections />
@@ -200,7 +203,7 @@
         <show-spec-declaration-navigation-gutter value="true" />
         <enable-spellchecking value="true" />
         <enable-reference-spellchecking value="false" />
-        <show-parser-issue-notifications value="true" />
+        <show-parser-issue-notifications value="false" />
         <show-dialect-suggestion-notifications value="true" />
       </general>
       <confirmations>
