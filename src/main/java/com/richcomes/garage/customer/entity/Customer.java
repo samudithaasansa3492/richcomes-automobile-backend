@@ -109,6 +109,18 @@ public class Customer {
     @Column(name = "status", nullable = false, length = 20)
     private CustomerStatus status = CustomerStatus.ACTIVE;
 
+    @Column(name = "sms_consent", nullable = false)
+    private boolean smsConsent = false;
+
+    @Column(name = "mobile_verified", nullable = false)
+    private boolean mobileVerified = false;
+
+    @Column(name = "email_consent", nullable = false)
+    private boolean emailConsent = false;
+
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified = false;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
@@ -226,6 +238,38 @@ public class Customer {
 
     public void setStatus(CustomerStatus status) {
         this.status = status;
+    }
+
+    public boolean isSmsConsent() {
+        return smsConsent;
+    }
+
+    public void setSmsConsent(boolean smsConsent) {
+        this.smsConsent = smsConsent;
+    }
+
+    public boolean isMobileVerified() {
+        return mobileVerified;
+    }
+
+    public void setMobileVerified(boolean mobileVerified) {
+        this.mobileVerified = mobileVerified;
+    }
+
+    public boolean isEmailConsent() {
+        return emailConsent;
+    }
+
+    public void setEmailConsent(boolean emailConsent) {
+        this.emailConsent = emailConsent;
+    }
+
+    public boolean isEmailVerified() {
+        return emailVerified;
+    }
+
+    public void setEmailVerified(boolean emailVerified) {
+        this.emailVerified = emailVerified;
     }
 
     public LocalDateTime getCreatedAt() {

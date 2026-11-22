@@ -1,12 +1,20 @@
 package com.richcomes.garage.service.service.impl;
 
+import com.richcomes.garage.history.integration.JobCompletionHistoryAdapter;
+import com.richcomes.garage.history.integration.JobCompletionHistoryAdapter.JobCompletionRequest;
 import com.richcomes.garage.service.dto.ServiceJobDTO;
 import com.richcomes.garage.service.entity.ServiceJob;
 import com.richcomes.garage.service.repository.ServiceJobRepository;
 import com.richcomes.garage.service.service.ServiceJobService;
+import com.richcomes.garage.vehicle.service.VehicleService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -14,11 +22,19 @@ import java.util.stream.Collectors;
 @Service
 public class ServiceJobServiceImpl implements ServiceJobService {
 
+    private static final Logger log = LoggerFactory.getLogger(ServiceJobServiceImpl.class);
+
     private final ServiceJobRepository repository;
+    private final VehicleService vehicleService;
+    private final JobCompletionHistoryAdapter historyAdapter;
 
     @Autowired
-    public ServiceJobServiceImpl(ServiceJobRepository repository) {
+    public ServiceJobServiceImpl(ServiceJobRepository repository,
+                                 VehicleService vehicleService,
+                                 JobCompletionHistoryAdapter historyAdapter) {
         this.repository = repository;
+        this.vehicleService = vehicleService;
+        this.historyAdapter = historyAdapter;
     }
 
     private ServiceJobDTO convertToDTO(ServiceJob entity) {
@@ -114,6 +130,7 @@ public class ServiceJobServiceImpl implements ServiceJobService {
     }
 
     @Override
+    @Transactional
     public ServiceJobDTO updateJobStatus(Long id, ServiceJob.JobStatus status) {
         ServiceJob existing = repository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Job not found with id: " + id));
@@ -124,7 +141,59 @@ public class ServiceJobServiceImpl implements ServiceJobService {
         }
 
         ServiceJob savedEntity = repository.save(existing);
+
+        // Call Member 06 adapter after successful completion or closure
+        if (status == ServiceJob.JobStatus.COMPLETED || status == ServiceJob.JobStatus.CLOSED) {
+            try {
+                JobCompletionRequest request = buildHistoryRequest(savedEntity);
+                historyAdapter.createHistoryFromJobCompletion(request);
+                log.info("Service history created for completed job {}", savedEntity.getId());
+            } catch (IllegalArgumentException e) {
+                log.error("Failed to create service history for job {}: {}", savedEntity.getId(), e.getMessage());
+                // History creation failure should not rollback job completion
+                // The job status change is valid; history creation is a secondary operation
+            }
+        }
+
         return convertToDTO(savedEntity);
+    }
+
+    private JobCompletionRequest buildHistoryRequest(ServiceJob job) {
+        JobCompletionRequest request = new JobCompletionRequest();
+        request.setJobId(job.getId());
+        request.setVehicleId(job.getVehicleId());
+        request.setServiceDate(job.getActualCompletionDate() != null
+                ? job.getActualCompletionDate().toLocalDate()
+                : LocalDate.now());
+
+        // Get odometer from vehicle's current mileage
+        Integer odometer = 0;
+        try {
+            var vehicle = vehicleService.getVehicleEntityById(job.getVehicleId());
+            if (vehicle != null && vehicle.getCurrentMileage() != null) {
+                odometer = vehicle.getCurrentMileage().intValue();
+            }
+        } catch (Exception e) {
+            log.warn("Could not retrieve vehicle mileage for job {}: {}", job.getId(), e.getMessage());
+        }
+        request.setOdometer(odometer);
+
+        request.setSummary("Job completed: " + (job.getComplaintDescription() != null ? job.getComplaintDescription() : "Service completed"));
+        request.setTechnicianId(job.getAssignedEmployeeId());
+        // Invoice ID would be populated if Member 05 integration exists
+        request.setInvoiceId(null);
+
+        // Calculate total cost from job items and parts
+        BigDecimal totalCost = BigDecimal.ZERO;
+        // This would require integration with job items/parts services
+        // For now, using zero as placeholder
+        request.setTotalCost(totalCost);
+
+        // Calculate next service date based on vehicle/service type
+        // For now, using null as placeholder - can be enhanced with business rules
+        request.setNextServiceDate(null);
+
+        return request;
     }
 
     @Override

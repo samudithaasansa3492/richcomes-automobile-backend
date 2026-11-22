@@ -1,6 +1,7 @@
 
 package com.richcomes.garage.reminder.service;
 
+import com.richcomes.garage.audit.service.AuditLogService;
 import com.richcomes.garage.history.entity.ServiceHistory;
 import com.richcomes.garage.history.repository.ServiceHistoryRepository;
 
@@ -35,6 +36,7 @@ public class ServiceReminderService {
     private final ServiceReminderRepository reminderRepository;
     private final ServiceHistoryRepository serviceHistoryRepository;
     private final NotificationService notificationService;
+    private final AuditLogService auditLogService;
     private static final ZoneId BUSINESS_ZONE = ZoneId.of("Asia/Colombo");
 
     private LocalDate today() { return LocalDate.now(BUSINESS_ZONE); }
@@ -42,11 +44,13 @@ public class ServiceReminderService {
     public ServiceReminderService(
             ServiceReminderRepository reminderRepository,
             ServiceHistoryRepository serviceHistoryRepository,
-            NotificationService notificationService) {
+            NotificationService notificationService,
+            AuditLogService auditLogService) {
 
         this.reminderRepository = reminderRepository;
         this.serviceHistoryRepository = serviceHistoryRepository;
         this.notificationService = notificationService;
+        this.auditLogService = auditLogService;
     }
 
     // CREATE REMINDER
@@ -119,7 +123,24 @@ public class ServiceReminderService {
         reminder.setAiSuggestedDate(request.getAiSuggestedDate());
         reminder.setStatus(ServiceReminderStatus.PENDING);
 
-        return mapToResponse(reminderRepository.save(reminder));
+        ServiceReminder saved = reminderRepository.save(reminder);
+
+        // Audit: reminder creation
+        auditLogService.logEvent(
+                0L, // System actor for automatic creation
+                "CREATE",
+                "SERVICE_REMINDER",
+                saved.getId(),
+                null,
+                "vehicleId=" + saved.getVehicleId() +
+                        ", customerId=" + saved.getCustomerId() +
+                        ", nextServiceDate=" + saved.getNextServiceDate() +
+                        ", reminderDate=" + saved.getReminderDate(),
+                "Service reminder created",
+                null
+        );
+
+        return mapToResponse(saved);
     }
 
     // GENERATE REMINDER FROM SERVICE HISTORY
@@ -191,7 +212,25 @@ public class ServiceReminderService {
         reminder.setAiSuggestedDate(null);
         reminder.setStatus(ServiceReminderStatus.PENDING);
 
-        return mapToResponse(reminderRepository.save(reminder));
+        ServiceReminder saved = reminderRepository.save(reminder);
+
+        // Audit: reminder generation from service history
+        auditLogService.logEvent(
+                0L, // System actor for automatic creation
+                "CREATE",
+                "SERVICE_REMINDER",
+                saved.getId(),
+                null,
+                "vehicleId=" + saved.getVehicleId() +
+                        ", customerId=" + saved.getCustomerId() +
+                        ", serviceHistoryId=" + saved.getServiceHistoryId() +
+                        ", nextServiceDate=" + saved.getNextServiceDate() +
+                        ", reminderDate=" + saved.getReminderDate(),
+                "Service reminder generated from service history",
+                null
+        );
+
+        return mapToResponse(saved);
     }
 
     // GET ALL REMINDERS
@@ -324,7 +363,23 @@ public class ServiceReminderService {
         // Store the queued notification ID to avoid re-queueing each day.
         // This does NOT mean the SMS was delivered.
         reminder.setNotificationId(notification.getId());
-        return mapToResponse(reminderRepository.save(reminder));
+        ServiceReminder saved = reminderRepository.save(reminder);
+
+        // Audit: notification queued for reminder
+        auditLogService.logEvent(
+                0L, // System actor
+                "NOTIFICATION_QUEUED",
+                "SERVICE_REMINDER",
+                reminder.getId(),
+                null,
+                "notificationId=" + notification.getId() +
+                        ", channel=" + NotificationChannel.SMS +
+                        ", recipient=" + maskPhone(recipient),
+                "Notification queued for service reminder",
+                null
+        );
+
+        return mapToResponse(saved);
     }
 
     // CANCEL REMINDER
@@ -344,8 +399,21 @@ public class ServiceReminderService {
                     "Notification already queued; cancel it through the Notification module first");
         }
         reminder.setStatus(ServiceReminderStatus.CANCELLED);
+        ServiceReminder saved = reminderRepository.save(reminder);
 
-        return mapToResponse(reminderRepository.save(reminder));
+        // Audit: reminder cancelled
+        auditLogService.logEvent(
+                0L, // System actor - cancellation typically system-initiated or user-initiated
+                "CANCEL",
+                "SERVICE_REMINDER",
+                saved.getId(),
+                "status=PENDING",
+                "status=CANCELLED",
+                "Service reminder cancelled",
+                null
+        );
+
+        return mapToResponse(saved);
     }
 
     // UPDATE REMINDER
@@ -418,7 +486,37 @@ public class ServiceReminderService {
             );
         }
 
-        return mapToResponse(reminderRepository.save(reminder));
+        // Capture old values for audit
+        String oldValue = "nextServiceDate=" + reminder.getNextServiceDate() +
+                ", reminderDate=" + reminder.getReminderDate() +
+                ", message=" + reminder.getMessage() +
+                ", aiSuggestedDate=" + reminder.getAiSuggestedDate();
+
+        ServiceReminder saved = reminderRepository.save(reminder);
+
+        // Audit: reminder updated
+        String newValue = "nextServiceDate=" + saved.getNextServiceDate() +
+                ", reminderDate=" + saved.getReminderDate() +
+                ", message=" + saved.getMessage() +
+                ", aiSuggestedDate=" + saved.getAiSuggestedDate();
+
+        auditLogService.logEvent(
+                0L, // System actor - update typically system or user initiated
+                "UPDATE",
+                "SERVICE_REMINDER",
+                saved.getId(),
+                oldValue,
+                newValue,
+                "Service reminder updated",
+                null
+        );
+
+        return mapToResponse(saved);
+    }
+
+    private String maskPhone(String phone) {
+        if (phone == null || phone.length() < 4) return "****";
+        return phone.substring(0, 3) + "****" + phone.substring(phone.length() - 1);
     }
 
     // PROTECT REMINDER HISTORY

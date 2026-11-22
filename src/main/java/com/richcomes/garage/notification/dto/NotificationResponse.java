@@ -3,6 +3,7 @@ package com.richcomes.garage.notification.dto;
 import com.richcomes.garage.notification.enums.NotificationChannel;
 import com.richcomes.garage.notification.enums.NotificationStatus;
 import com.richcomes.garage.notification.enums.NotificationType;
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 public class NotificationResponse {
@@ -19,6 +20,10 @@ public class NotificationResponse {
     private LocalDateTime sentAt;
     private String failureReason;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
+    private int retryCount;
+    private Instant nextRetryAt;
+    private String providerMessageId;
 
     public NotificationResponse() {
     }
@@ -117,5 +122,37 @@ public class NotificationResponse {
 
     public void setCreatedAt(LocalDateTime createdAt) {
         this.createdAt = createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public int getRetryCount() {
+        return retryCount;
+    }
+
+    public void setRetryCount(int retryCount) {
+        this.retryCount = retryCount;
+    }
+
+    public Instant getNextRetryAt() {
+        return nextRetryAt;
+    }
+
+    public void setNextRetryAt(Instant nextRetryAt) {
+        this.nextRetryAt = nextRetryAt;
+    }
+
+    public String getProviderMessageId() {
+        return providerMessageId;
+    }
+
+    public void setProviderMessageId(String providerMessageId) {
+        this.providerMessageId = providerMessageId;
     }
 }
