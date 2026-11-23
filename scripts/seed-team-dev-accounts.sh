@@ -31,7 +31,7 @@ psql_local() {
 }
 history="$(psql_local -c "SELECT COUNT(*)::text || ':' || MAX(version::int)::text
   FROM public.flyway_schema_history WHERE success AND version ~ '^[0-9]+$'")"
-[[ "$history" == 26:26 ]] || die "Expected local disposable V26, got $history"
+[[ "$history" == 28:28 ]] || die "Expected local disposable V1-V28, got $history"
 CREDS="$STATE/test-user-logins.txt"
 case "${1:-create}" in
   create)

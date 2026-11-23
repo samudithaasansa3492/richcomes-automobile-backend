@@ -37,13 +37,15 @@ expected = {
     24: "V24__create_multi_store_inventory.sql",
     25: "V25__add_store_location_to_service_job_parts.sql",
     26: "V26__add_inventory_permissions.sql",
+    27: "V27__add_customer_consent_verification.sql",
+    28: "V28__add_stock_transaction_store_location.sql",
 }
 for version, name in expected.items():
     if versions.get(version) != [name]:
         errors.append(f"Incorrect V{version} path: expected {name}")
 
-if set(versions) != set(range(1, 27)):
-    errors.append(f"Expected exactly versions V1–V26; found {sorted(versions)}")
+if set(versions) != set(range(1, 29)):
+    errors.append(f"Expected exactly versions V1–V28; found {sorted(versions)}")
 
 print(f"Source-only Flyway filename audit: {len(files)} files")
 for version in sorted(versions):
@@ -55,5 +57,5 @@ if errors:
         print(f"  - {err}")
     sys.exit(1)
 
-print("PASS: unique migration versions V1–V26; source names V24–V26 preserved")
+print("PASS: unique migration versions V1–V28; source names V24–V28 preserved")
 print("NOTE: this is NOT PostgreSQL migration, checksum, SQL-content, or Flyway validation.")
