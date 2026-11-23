@@ -1,3 +1,5 @@
+> **CURRENT SAFETY UPDATE — 2026-11-24:** Shared Supabase has **28** successful Flyway migrations (V27 customer verification and V28 stock transaction store location). The V26-locked release/backup steps below are historical; the current procedure is [V28 Production Release](current-v28-production-release.md). Never run V26-only backup scripts or old migrations on current V28. Production Railway remains gated on current-version independent recovery and runtime secrets.
+
 # Richcomes Spring Boot release — protected container deployment
 
 > **2026-11-21 live state:** connected shared Supabase has **26 successful Flyway migrations** through V26, and the `garage.user_accounts` table exists. V24–V26 scripts are merged to `main`, and the applied source Flyway history was verified against current Git. Railway backend remains staged and not deployed. A verified full recoverable backup of the **current V26 database** is still missing; do not claim older V14 snapshots protect V26 data. This integration does not provision secrets or launch customer traffic.
