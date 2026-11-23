@@ -1,7 +1,5 @@
-
 #!/usr/bin/env python3
 """Read-only source audit; does not import application config, contact DB, or run Flyway."""
-
 from collections import defaultdict
 from pathlib import Path
 import re
@@ -13,22 +11,16 @@ versions = defaultdict(list)
 errors = []
 
 for path in files:
-    match = re.fullmatch(
-        r"V([1-9][0-9]*)__([a-zA-Z0-9_]+)\.sql",
-        path.name
-    )
-
+    match = re.fullmatch(r"V([1-9][0-9]*)__([a-zA-Z0-9_]+)\.sql", path.name)
     if not match:
         errors.append(f"Invalid Flyway migration filename: {path.name}")
         continue
-
     versions[int(match.group(1))].append(path.name)
 
 for version, names in sorted(versions.items()):
     if len(names) != 1:
         errors.append(f"Duplicate V{version}: {', '.join(names)}")
 
-# Verify approved migration filenames.
 expected = {
     12: "V12__create_service_reminders.sql",
     13: "V13__create_job_items_and_parts.sql",
@@ -48,21 +40,14 @@ expected = {
     27: "V27__add_customer_consent_verification.sql",
     28: "V28__add_stock_transaction_store_location.sql",
 }
-
 for version, name in expected.items():
     if versions.get(version) != [name]:
         errors.append(f"Incorrect V{version} path: expected {name}")
 
-EXPECTED_LATEST_VERSION = 28
-
-if set(versions) != set(range(1, EXPECTED_LATEST_VERSION + 1)):
-    errors.append(
-        f"Expected exactly versions V1–V{EXPECTED_LATEST_VERSION}; "
-        f"found {sorted(versions)}"
-    )
+if set(versions) != set(range(1, 29)):
+    errors.append(f"Expected exactly versions V1–V28; found {sorted(versions)}")
 
 print(f"Source-only Flyway filename audit: {len(files)} files")
-
 for version in sorted(versions):
     print(f"  V{version}: {', '.join(versions[version])}")
 
@@ -72,12 +57,5 @@ if errors:
         print(f"  - {err}")
     sys.exit(1)
 
-print(
-    f"PASS: unique migration versions V1–V{EXPECTED_LATEST_VERSION}; "
-    "source names V24–V28 preserved"
-)
-
-print(
-    "NOTE: this is NOT PostgreSQL migration, checksum, "
-    "SQL-content, or Flyway validation."
-)
+print("PASS: unique migration versions V1–V28; source names V24–V28 preserved")
+print("NOTE: this is NOT PostgreSQL migration, checksum, SQL-content, or Flyway validation.")
