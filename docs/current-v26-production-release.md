@@ -1,3 +1,5 @@
+> **ARCHIVED/DO NOT USE ON CURRENT SHARED DB:** As of 2026-11-24 the shared DB is **V28**. The commands in this historical V26 guide deliberately reject V27/V28. Use [Current V28 production release and backup guide](current-v28-production-release.md). Do not run V26-only backup or recovery scripts on V28.
+
 # Current V26 shared Supabase recovery and production release gate
 
 **Verified 2026-11-21:** shared project `iehuxwbrwfysgujaqagj` has **26 successful Flyway migrations**, source CRC32 matches V1–V26 Git SQL files, and **33 application tables** under `garage`. The multi-store inventory API/migrations are merged into backend `main` as PR #53. The Railway `richcomes-backend` deployment is still STAGED, not public or production-ready.
