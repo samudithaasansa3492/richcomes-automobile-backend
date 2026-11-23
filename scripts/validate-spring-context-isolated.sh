@@ -39,7 +39,7 @@ command -v openssl >/dev/null || {
     exit 2
 }
 
-# Never inherit external database or JWT overrides.
+# Never inherit external database or runtime overrides.
 unset DB_URL DB_USERNAME DB_PASSWORD
 unset PGHOST PGPORT PGUSER PGPASSWORD PGDATABASE
 unset SPRING_DATASOURCE_URL
@@ -49,7 +49,7 @@ unset SPRING_APPLICATION_JSON SPRING_CONFIG_IMPORT
 unset JAVA_TOOL_OPTIONS JDK_JAVA_OPTIONS MAVEN_OPTS
 
 # --------------------------------------------------
-# 2. Create disposable test workspace
+# 2. Create disposable workspace
 # --------------------------------------------------
 
 ROOT="$(mktemp -d /tmp/richcomes-context-validation.XXXXXX)"
@@ -66,7 +66,7 @@ cleanup() {
 trap cleanup EXIT
 
 # --------------------------------------------------
-# 3. Windows Git Bash path compatibility
+# 3. Windows Git Bash compatibility
 # --------------------------------------------------
 
 KEY_PUBLIC_LOCATION="file:$ROOT/public.pem"
@@ -83,19 +83,16 @@ if [[ "${OSTYPE:-}" == msys* ||
         exit 2
     }
 
-    # Convert Git Bash paths into Windows-compatible paths.
     WIN_ROOT="$(cygpath -m "$ROOT")"
 
-    # Proper file URI format for native Windows Java.
     KEY_PUBLIC_LOCATION="file:///${WIN_ROOT}/public.pem"
     KEY_PRIVATE_LOCATION="file:///${WIN_ROOT}/private.pem"
 
-    # Native Windows path for Java and Maven temporary files.
     TEST_TMP_NATIVE="$WIN_ROOT"
 fi
 
 # --------------------------------------------------
-# 4. Generate disposable JWT RSA keys
+# 4. Generate disposable RSA keys
 # --------------------------------------------------
 
 echo "=== Generating disposable RSA test key pair ==="
@@ -125,7 +122,7 @@ test -s "$ROOT/public.pem" || {
 }
 
 # --------------------------------------------------
-# 5. Start isolated PostgreSQL container
+# 5. Start isolated PostgreSQL
 # --------------------------------------------------
 
 echo "=== Starting ephemeral PostgreSQL (localhost only) ==="
@@ -179,7 +176,7 @@ binding="$(docker port "$NAME" 5432/tcp)"
 port="${BASH_REMATCH[1]}"
 
 # --------------------------------------------------
-# 7. Create Supabase role fixtures
+# 7. Create synthetic Supabase role fixtures
 # --------------------------------------------------
 
 docker exec -i \
@@ -202,11 +199,85 @@ echo "PASS: disposable PostgreSQL and Supabase NOLOGIN role fixtures"
 
 URL="jdbc:postgresql://127.0.0.1:${port}/richcomes_context?sslmode=disable"
 
-echo "=== Full-context security tests plus PostgreSQL integration tests ==="
+# --------------------------------------------------
+# 9. Diagnostic function (read-only)
+# --------------------------------------------------
+
+diagnose_schema() {
+    echo "=== Schema compatibility diagnostics (isolated DB only) ==="
+
+    echo "--- Flyway migration history ---"
+
+    docker exec \
+        -e "PGPASSWORD=$DB_PASSWORD" \
+        "$NAME" \
+        psql -X -U postgres -d richcomes_context \
+        -c "
+        SELECT version, description, success
+        FROM public.flyway_schema_history
+        ORDER BY installed_rank DESC
+        LIMIT 6;
+        " || true
+
+    echo "--- Customer verification columns ---"
+
+    docker exec \
+        -e "PGPASSWORD=$DB_PASSWORD" \
+        "$NAME" \
+        psql -X -U postgres -d richcomes_context \
+        -c "
+        SELECT COUNT(DISTINCT attname) AS verification_column_count
+        FROM pg_attribute
+        WHERE attrelid = to_regclass('garage.user_accounts')
+          AND attnum > 0
+          AND NOT attisdropped
+          AND attname IN (
+              'customer_verified_at',
+              'customer_verified_by',
+              'customer_verification_ref',
+              'customer_verified_email',
+              'customer_password_set_at'
+          );
+        " || true
+
+    echo "--- Recovery challenge constraint ---"
+
+    docker exec \
+        -e "PGPASSWORD=$DB_PASSWORD" \
+        "$NAME" \
+        psql -X -U postgres -d richcomes_context \
+        -c "
+        SELECT
+            conname,
+            pg_get_constraintdef(oid) AS definition,
+            (
+                pg_get_constraintdef(oid)
+                LIKE '%INITIAL_PASSWORD%'
+            ) AS allows_initial_password
+        FROM pg_constraint
+        WHERE conrelid = to_regclass('garage.recovery_challenges')
+          AND conname = 'recovery_challenges_purpose_check';
+        " || true
+
+    echo "--- Matching recovery constraints ---"
+
+    docker exec \
+        -e "PGPASSWORD=$DB_PASSWORD" \
+        "$NAME" \
+        psql -X -U postgres -d richcomes_context \
+        -c "
+        SELECT conname, pg_get_constraintdef(oid) AS definition
+        FROM pg_constraint
+        WHERE conrelid = to_regclass('garage.recovery_challenges')
+          AND contype = 'c';
+        " || true
+}
 
 # --------------------------------------------------
-# 9. Run full-context integration tests
+# 10. Run full-context integration tests
 # --------------------------------------------------
+
+echo "=== Full-context security tests plus PostgreSQL integration tests ==="
 
 if env -i \
     HOME="$HOME" \
@@ -245,9 +316,13 @@ else
 
     echo "=== FULL CONTEXT TEST FAILURE (no shared DB touched) ==="
 
+    # Print the actual failure reason.
     grep -m 12 -E \
         'Caused by:|Tests run:|expected:|but was:|ERROR:' \
         "$ROOT/maven.log" || true
+
+    # Read-only checks against this script's throwaway database.
+    diagnose_schema
 
     tail -n 65 "$ROOT/maven.log"
 
