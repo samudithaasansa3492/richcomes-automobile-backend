@@ -200,7 +200,7 @@ echo "PASS: disposable PostgreSQL and Supabase NOLOGIN role fixtures"
 URL="jdbc:postgresql://127.0.0.1:${port}/richcomes_context?sslmode=disable"
 
 # --------------------------------------------------
-# 9. Diagnostic function (read-only)
+# 9. Schema diagnostics (read-only)
 # --------------------------------------------------
 
 diagnose_schema() {
@@ -298,6 +298,7 @@ if env -i \
     -Djava.io.tmpdir="$TEST_TMP_NATIVE" \
     -Dtest=GarageApplicationTests,ServiceCategoryControllerTest,CashierPermissionPostgresIT \
     -Dspring.flyway.enabled=true \
+    -Dspring.jpa.hibernate.ddl-auto=none \
     -Dspring.datasource.url="$URL" \
     -Dspring.datasource.username=postgres \
     -Dspring.datasource.password="$DB_PASSWORD" \
@@ -316,12 +317,10 @@ else
 
     echo "=== FULL CONTEXT TEST FAILURE (no shared DB touched) ==="
 
-    # Print the actual failure reason.
     grep -m 12 -E \
         'Caused by:|Tests run:|expected:|but was:|ERROR:' \
         "$ROOT/maven.log" || true
 
-    # Read-only checks against this script's throwaway database.
     diagnose_schema
 
     tail -n 65 "$ROOT/maven.log"
