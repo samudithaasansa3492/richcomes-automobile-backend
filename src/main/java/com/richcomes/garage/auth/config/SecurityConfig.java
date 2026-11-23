@@ -59,6 +59,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/auth/me").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/customer/me").hasAuthority("customer:self")
 
+                        .requestMatchers(HttpMethod.POST, "/api/customer/appointments")
+                        .hasAuthority("customer:self")
+                        .requestMatchers(HttpMethod.PATCH, "/api/customer/appointments/{id}/cancel")
+                        .hasAuthority("customer:self")
+
                         .requestMatchers(HttpMethod.POST, "/api/v1/customers", "/api/customer-accounts")
                         .hasAuthority("customer:register")
 
@@ -135,7 +140,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, "/api/v1/appointments/{id}/approve",
                                 "/api/v1/appointments/{id}/reject",
                                 "/api/v1/appointments/{id}/complete",
-                                "/api/v1/appointments/{id}/not-completed")
+                                "/api/v1/appointments/{id}/not-completed",
+                                "/api/v1/appointments/{id}/cancel")
                         .hasAuthority("appointment:manage")
 
                         .requestMatchers(HttpMethod.GET,

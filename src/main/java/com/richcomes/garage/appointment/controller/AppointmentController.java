@@ -5,6 +5,7 @@ import com.richcomes.garage.appointment.dto.AppointmentCreateRequest;
 import com.richcomes.garage.appointment.dto.AppointmentResponse;
 import com.richcomes.garage.appointment.enums.AppointmentStatus;
 import com.richcomes.garage.appointment.service.AppointmentService;
+import com.richcomes.garage.auth.security.AccountPrincipal;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -13,6 +14,7 @@ import jakarta.validation.constraints.NotNull;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -150,6 +152,21 @@ public class AppointmentController {
                         id,
                         request.reason(),
                         request.staffNotes()
+                )
+        );
+    }
+
+    @PatchMapping("/{id}/cancel")
+    public ResponseEntity<AppointmentResponse> cancelAppointment(
+            @PathVariable Long id,
+            @Valid @RequestBody AppointmentReasonRequest request,
+            @AuthenticationPrincipal AccountPrincipal principal) {
+
+        return ResponseEntity.ok(
+                appointmentService.cancelStaffAppointment(
+                        id,
+                        request.reason(),
+                        principal
                 )
         );
     }

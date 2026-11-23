@@ -39,6 +39,14 @@ public class AppointmentResponse {
 
     private String notCompletedReason;
 
+    private String cancellationReason;
+
+    private LocalDateTime cancelledAt;
+
+    private Long cancelledByAccountId;
+
+    private String cancelledByType;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
@@ -164,6 +172,38 @@ public class AppointmentResponse {
 
     public void setNotCompletedReason(String notCompletedReason) {
         this.notCompletedReason = notCompletedReason;
+    }
+
+    public String getCancellationReason() {
+        return cancellationReason;
+    }
+
+    public void setCancellationReason(String cancellationReason) {
+        this.cancellationReason = cancellationReason;
+    }
+
+    public LocalDateTime getCancelledAt() {
+        return cancelledAt;
+    }
+
+    public void setCancelledAt(LocalDateTime cancelledAt) {
+        this.cancelledAt = cancelledAt;
+    }
+
+    public Long getCancelledByAccountId() {
+        return cancelledByAccountId;
+    }
+
+    public void setCancelledByAccountId(Long cancelledByAccountId) {
+        this.cancelledByAccountId = cancelledByAccountId;
+    }
+
+    public String getCancelledByType() {
+        return cancelledByType;
+    }
+
+    public void setCancelledByType(String cancelledByType) {
+        this.cancelledByType = cancelledByType;
     }
 
     public LocalDateTime getCreatedAt() {
