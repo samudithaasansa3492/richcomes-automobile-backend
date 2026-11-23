@@ -506,6 +506,7 @@ public class AppointmentService {
                 .toList();
     }
 
+
     public AppointmentResponse approveAppointment(
             Long id,
             LocalDate confirmedDate,
@@ -515,6 +516,43 @@ public class AppointmentService {
         Appointment appointment = findAppointmentByIdForUpdate(id);
 
         requireStatus(appointment, AppointmentStatus.PENDING);
+
+        Customer customer = appointment.getCustomer();
+        Vehicle vehicle = appointment.getVehicle();
+
+        if (customer != null || vehicle != null) {
+
+            if (customer == null || vehicle == null) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Registered appointment must have both customer and vehicle"
+                );
+            }
+
+            if (customer.getStatus() != CustomerStatus.ACTIVE) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Cannot approve appointment for a suspended customer"
+                );
+            }
+
+            if (vehicle.getStatus() != VehicleStatus.ACTIVE) {
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Cannot approve appointment for an inactive vehicle"
+                );
+            }
+
+            if (vehicle.getCustomer() == null
+                    || !customer.getId().equals(
+                    vehicle.getCustomer().getId())) {
+
+                throw new ResponseStatusException(
+                        HttpStatus.CONFLICT,
+                        "Vehicle does not belong to the appointment customer"
+                );
+            }
+        }
 
         if (confirmedDate == null || appointmentTime == null) {
             throw new ResponseStatusException(
@@ -526,7 +564,10 @@ public class AppointmentService {
         LocalDateTime schedule =
                 LocalDateTime.of(confirmedDate, appointmentTime);
 
-        if (schedule.isBefore(LocalDateTime.now())) {
+        LocalDateTime now =
+                LocalDateTime.now(ZoneId.of("Asia/Colombo"));
+
+        if (schedule.isBefore(now)) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "Confirmed appointment schedule cannot be in the past"
@@ -536,11 +577,12 @@ public class AppointmentService {
         appointment.setConfirmedDate(confirmedDate);
         appointment.setAppointmentTime(appointmentTime);
         appointment.setStaffNotes(normalizeOptional(staffNotes));
-        appointment.setContactedAt(LocalDateTime.now());
+        appointment.setContactedAt(now);
         appointment.setStatus(AppointmentStatus.APPROVED);
 
         return mapToResponse(appointmentRepository.save(appointment));
     }
+
 
     public AppointmentResponse rejectAppointment(
             Long id,

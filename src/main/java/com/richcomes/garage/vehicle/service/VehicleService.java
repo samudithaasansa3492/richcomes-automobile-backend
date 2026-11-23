@@ -2,6 +2,7 @@
 package com.richcomes.garage.vehicle.service;
 
 import com.richcomes.garage.customer.entity.Customer;
+import com.richcomes.garage.customer.enums.CustomerStatus;
 import com.richcomes.garage.customer.service.CustomerService;
 import com.richcomes.garage.vehicle.dto.VehicleCreateRequest;
 import com.richcomes.garage.vehicle.dto.VehicleResponse;
@@ -92,6 +93,14 @@ public class VehicleService {
 
         Customer customer = customerService
                 .getCustomerEntityById(request.getCustomerId());
+
+        if (customer.getStatus() != CustomerStatus.ACTIVE) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Cannot register a vehicle for an inactive customer"
+            );
+        }
 
         Vehicle vehicle = new Vehicle();
 
@@ -279,6 +288,17 @@ public class VehicleService {
     public VehicleResponse activateVehicle(Long id) {
 
         Vehicle vehicle = findVehicleById(id);
+
+        Customer customer = vehicle.getCustomer();
+
+        if (customer == null
+                || customer.getStatus() != CustomerStatus.ACTIVE) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Cannot activate a vehicle for an inactive customer"
+            );
+        }
 
         vehicle.setStatus(VehicleStatus.ACTIVE);
 
