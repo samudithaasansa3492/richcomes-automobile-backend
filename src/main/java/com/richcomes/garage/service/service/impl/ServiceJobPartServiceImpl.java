@@ -335,6 +335,7 @@ public class ServiceJobPartServiceImpl
                 new StockTransaction();
 
         transaction.setStockItem(stockItem);
+        transaction.setStoreLocation(store);
         transaction.setTransactionType(
                 StockTransactionType.STOCK_OUT
         );
@@ -492,6 +493,7 @@ public class ServiceJobPartServiceImpl
                 new StockTransaction();
 
         transaction.setStockItem(stockItem);
+        transaction.setStoreLocation(jobPart.getStoreLocation());
         transaction.setTransactionType(
                 StockTransactionType.STOCK_IN
         );

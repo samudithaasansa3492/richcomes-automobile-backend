@@ -171,12 +171,13 @@ public class StockMovementService {
         transaction.setQuantityAfter(globalAfter);
         transaction.setReason(request.getReason());
 
-        // StockTransaction currently has no storeLocation mapping. Record an explicit
-        // store reference in the audit fields until a dedicated store FK is migrated.
+        // Dedicated FK is now authoritative for the store. Preserve the legacy
+        // STORE_LOCATION reference to avoid breaking existing API consumers.
+        transaction.setStoreLocation(store);
         transaction.setReferenceType("STORE_LOCATION");
         transaction.setReferenceId(storeId);
 
-        // Authenticated actor / performedBy requires separate auth integration.
+        // Employee tracking is intentionally out of scope per client decision.
         StockTransaction saved = transactionRepository.saveAndFlush(transaction);
         return mapToResponse(saved);
     }
@@ -203,6 +204,44 @@ public class StockMovementService {
                 .stream()
                 .map(this::mapToResponse)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<StockMovementResponse> getStoreTransactions(Long storeId) {
+        validateStoreExists(storeId);
+        return transactionRepository.findByStoreLocationIdOrderByCreatedAtDesc(storeId)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<StockMovementResponse> getItemStoreTransactions(Long itemId, Long storeId) {
+        if (itemId == null || itemId <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Valid stock item ID is required");
+        }
+        if (!itemRepository.existsById(itemId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND, "Stock item not found");
+        }
+        validateStoreExists(storeId);
+        return transactionRepository
+                .findByStockItemIdAndStoreLocationIdOrderByCreatedAtDesc(itemId, storeId)
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    private void validateStoreExists(Long storeId) {
+        if (storeId == null || storeId <= 0) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST, "Valid store location ID is required");
+        }
+        if (!storeLocationRepository.existsById(storeId)) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND, "Store location not found");
+        }
     }
 
     private void validateQuantityForUnit(StockItem item, BigDecimal quantity) {
@@ -262,6 +301,12 @@ public class StockMovementService {
 
         response.setId(transaction.getId());
         response.setStockItemId(item.getId());
+        if (transaction.getStoreLocation() != null) {
+            StoreLocation store = transaction.getStoreLocation();
+            response.setStoreLocationId(store.getId());
+            response.setStoreCode(store.getStoreCode());
+            response.setStoreName(store.getStoreName());
+        }
         response.setItemCode(item.getItemCode());
         response.setItemName(item.getItemName());
         response.setTransactionType(transaction.getTransactionType());

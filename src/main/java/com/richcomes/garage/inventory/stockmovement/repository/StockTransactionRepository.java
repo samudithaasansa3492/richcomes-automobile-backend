@@ -15,6 +15,13 @@ public interface StockTransactionRepository
     List<StockTransaction>
     findByStockItemIdOrderByCreatedAtDesc(Long stockItemId);
 
+    // Store-specific history (legacy transactions with an unknown store are excluded).
+    List<StockTransaction> findByStoreLocationIdOrderByCreatedAtDesc(Long storeLocationId);
+
+    // One stock item within a selected store.
+    List<StockTransaction> findByStockItemIdAndStoreLocationIdOrderByCreatedAtDesc(
+            Long stockItemId, Long storeLocationId);
+
     // Get all transactions ordered by newest first
     List<StockTransaction> findAllByOrderByCreatedAtDesc();
 

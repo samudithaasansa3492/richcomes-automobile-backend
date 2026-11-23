@@ -132,35 +132,20 @@ class GRNServiceTest {
         ArgumentCaptor<StockTransaction> captor =
                 ArgumentCaptor.forClass(StockTransaction.class);
 
-        verify(transactionRepository).save(captor.capture());
-
-        StockTransaction transaction = captor.getValue();
-
-        assertEquals(
-                StockTransactionType.STOCK_IN,
-                transaction.getTransactionType()
-        );
-
-        assertEquals(
-                0,
-                new BigDecimal("20.000")
-                        .compareTo(transaction.getQuantity())
-        );
-
-        assertEquals(
-                0,
-                BigDecimal.ZERO.compareTo(
-                        transaction.getQuantityBefore()
-                )
-        );
-
-        assertEquals(
-                0,
-                new BigDecimal("20.000")
-                        .compareTo(transaction.getQuantityAfter())
-        );
-
-        assertEquals("GRN", transaction.getReferenceType());
+        verify(transactionRepository, times(3)).save(captor.capture());
+        List<StockTransaction> rows = captor.getAllValues();
+        assertEquals(List.of(1L, 2L, 3L), rows.stream()
+                .map(row -> row.getStoreLocation().getId()).toList());
+        assertEquals(0, new BigDecimal("20.000").compareTo(rows.stream()
+                .map(StockTransaction::getQuantity)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)));
+        assertEquals(0, BigDecimal.ZERO.compareTo(rows.get(0).getQuantityBefore()));
+        assertEquals(0, new BigDecimal("20.000")
+                .compareTo(rows.get(2).getQuantityAfter()));
+        for (StockTransaction row : rows) {
+            assertEquals(StockTransactionType.STOCK_IN, row.getTransactionType());
+            assertEquals("GRN", row.getReferenceType());
+        }
 
         verify(grnRepository).saveAndFlush(grn);
     }
@@ -470,27 +455,17 @@ class GRNServiceTest {
         ArgumentCaptor<StockTransaction> captor =
                 ArgumentCaptor.forClass(StockTransaction.class);
 
-        verify(transactionRepository).save(captor.capture());
-
-        StockTransaction transaction = captor.getValue();
-
-        assertEquals(
-                0,
-                new BigDecimal("1.250")
-                        .compareTo(transaction.getQuantity())
-        );
-
-        assertEquals(
-                0,
-                new BigDecimal("10.500")
-                        .compareTo(transaction.getQuantityBefore())
-        );
-
-        assertEquals(
-                0,
-                new BigDecimal("11.750")
-                        .compareTo(transaction.getQuantityAfter())
-        );
+        verify(transactionRepository, times(3)).save(captor.capture());
+        List<StockTransaction> rows = captor.getAllValues();
+        assertEquals(List.of(1L, 2L, 3L), rows.stream()
+                .map(row -> row.getStoreLocation().getId()).toList());
+        assertEquals(0, new BigDecimal("1.250").compareTo(rows.stream()
+                .map(StockTransaction::getQuantity)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)));
+        assertEquals(0, new BigDecimal("10.500")
+                .compareTo(rows.get(0).getQuantityBefore()));
+        assertEquals(0, new BigDecimal("11.750")
+                .compareTo(rows.get(2).getQuantityAfter()));
 
         assertEquals(GRNStatus.CONFIRMED, grn.getStatus());
     }
