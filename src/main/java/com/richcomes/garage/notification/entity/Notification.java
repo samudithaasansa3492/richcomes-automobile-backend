@@ -4,12 +4,13 @@ import com.richcomes.garage.notification.enums.NotificationChannel;
 import com.richcomes.garage.notification.enums.NotificationStatus;
 import com.richcomes.garage.notification.enums.NotificationType;
 import jakarta.persistence.*;
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 /**
  * Notification
  * PDF Model 29: Stores messages sent by the system.
- * 
+ *
  * Main functions:
  * - Store appointment notifications
  * - Store service reminder SMS
@@ -62,6 +63,19 @@ public class Notification {
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "updated_at")
+    private LocalDateTime updatedAt;
+
+    // Delivery tracking fields
+    @Column(name = "retry_count", nullable = false)
+    private int retryCount = 0;
+
+    @Column(name = "next_retry_at")
+    private Instant nextRetryAt;
+
+    @Column(name = "provider_message_id", length = 100)
+    private String providerMessageId;
+
 
     public Notification() {
     }
@@ -69,9 +83,15 @@ public class Notification {
     @PrePersist
     protected void onCreate() {
         this.createdAt = LocalDateTime.now();
+        this.updatedAt = LocalDateTime.now();
         if (this.status == null) {
             this.status = NotificationStatus.PENDING;
         }
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now();
     }
 
     public Long getId() {
@@ -160,5 +180,37 @@ public class Notification {
 
     public LocalDateTime getCreatedAt() {
         return createdAt;
+    }
+
+    public LocalDateTime getUpdatedAt() {
+        return updatedAt;
+    }
+
+    public void setUpdatedAt(LocalDateTime updatedAt) {
+        this.updatedAt = updatedAt;
+    }
+
+    public int getRetryCount() {
+        return retryCount;
+    }
+
+    public void setRetryCount(int retryCount) {
+        this.retryCount = retryCount;
+    }
+
+    public Instant getNextRetryAt() {
+        return nextRetryAt;
+    }
+
+    public void setNextRetryAt(Instant nextRetryAt) {
+        this.nextRetryAt = nextRetryAt;
+    }
+
+    public String getProviderMessageId() {
+        return providerMessageId;
+    }
+
+    public void setProviderMessageId(String providerMessageId) {
+        this.providerMessageId = providerMessageId;
     }
 }

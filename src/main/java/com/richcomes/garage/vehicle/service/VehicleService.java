@@ -287,6 +287,18 @@ public class VehicleService {
         return mapToResponse(updatedVehicle);
     }
 
+    @Transactional(readOnly = true)
+    public Vehicle getVehicleEntityById(Long id) {
+
+        return vehicleRepository.findById(id)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Vehicle not found"
+                        )
+                );
+    }
+
     private Vehicle findVehicleById(Long id) {
 
         return vehicleRepository.findById(id)

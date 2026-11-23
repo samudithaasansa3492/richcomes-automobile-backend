@@ -74,7 +74,7 @@ echo "=== Full-context security tests plus opt-in PostgreSQL permission/audit tr
 
 if env -i \
   HOME="$HOME" USER="${USER:-codespace}" PATH="$PATH" JAVA_HOME="$JAVA_HOME" \
-  DB_URL="$URL" DB_USERNAME=postgres DB_PASSWORD="$DB_PASSWORD" \
+  DB_USERNAME=postgres DB_PASSWORD="$DB_PASSWORD" \
   JWT_ISSUER="https://isolated-junit.invalid" JWT_AUDIENCE=richcomes-test \
   JWT_PUBLIC_KEY_LOCATION="file:$ROOT/public.pem" \
   JWT_PRIVATE_KEY_LOCATION="file:$ROOT/private.pem" \
@@ -82,6 +82,11 @@ if env -i \
   ./mvnw -B \
     -Dtest=GarageApplicationTests,ServiceCategoryControllerTest,CashierPermissionPostgresIT \
     -Dspring.flyway.enabled=true \
+    -Dspring.datasource.url="$URL" \
+    -Dspring.datasource.username=postgres \
+    -Dspring.datasource.password="$DB_PASSWORD" \
+    -Dspring.datasource.driver-class-name=org.postgresql.Driver \
+    -Dspring.jpa.properties.hibernate.dialect=org.hibernate.dialect.PostgreSQLDialect \
     test > "$ROOT/maven.log" 2>&1
 then
   grep -E 'Tests run:|BUILD SUCCESS' "$ROOT/maven.log" | tail -n 12

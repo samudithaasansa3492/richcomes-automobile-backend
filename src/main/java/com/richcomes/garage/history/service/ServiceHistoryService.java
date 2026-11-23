@@ -120,6 +120,18 @@ public class ServiceHistoryService {
         ServiceHistory saved =
                 serviceHistoryRepository.save(history);
 
+        // Audit: history creation
+        auditLogService.logEvent(
+                0L, // System actor for automatic creation
+                "CREATE",
+                "SERVICE_HISTORY",
+                saved.getId(),
+                null,
+                historySnapshot(saved),
+                "Service history created from job completion",
+                null
+        );
+
         // Generate a reminder only when the service date allows a full 7-day lead.
         // The Vehicle module supplies the customer ID via the resolver.
         if (saved.getNextServiceDate() != null
@@ -366,11 +378,26 @@ public class ServiceHistoryService {
     // DELETE SERVICE HISTORY - UNCHANGED AS REQUESTED
     // =====================================================
 
-    public void deleteServiceHistory(Long id) {
+    public void deleteServiceHistory(Long id, Long actorUserId, String ipAddress) {
 
         ServiceHistory history = findHistoryById(id);
 
+        // Capture snapshot before deletion
+        String oldValue = historySnapshot(history);
+
         serviceHistoryRepository.delete(history);
+
+        // Audit: history deletion
+        auditLogService.logEvent(
+                actorUserId,
+                "DELETE",
+                "SERVICE_HISTORY",
+                id,
+                oldValue,
+                null,
+                "Service history deleted",
+                ipAddress
+        );
     }
 
     // =====================================================

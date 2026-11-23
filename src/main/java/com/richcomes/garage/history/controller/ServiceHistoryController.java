@@ -180,14 +180,18 @@ public class ServiceHistoryController {
     }
 
     // =====================================================
-    // DELETE HISTORY - UNCHANGED
+    // DELETE HISTORY
     // =====================================================
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteHistory(
-            @PathVariable Long id) {
+            @PathVariable Long id,
+            HttpServletRequest httpRequest) {
 
-        serviceHistoryService.deleteServiceHistory(id);
+        Long actorUserId = getAuthenticatedUserId();
+        String ipAddress = httpRequest.getRemoteAddr();
+
+        serviceHistoryService.deleteServiceHistory(id, actorUserId, ipAddress);
 
         return ResponseEntity.noContent().build();
     }

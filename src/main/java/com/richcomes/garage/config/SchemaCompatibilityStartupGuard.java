@@ -2,6 +2,7 @@ package com.richcomes.garage.config;
 
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -10,8 +11,12 @@ import org.springframework.stereotype.Component;
  * A healthy DB connection alone does not mean the schema supports this release.
  * This checks PostgreSQL metadata without requiring the runtime role to
  * read or mutate the protected public.flyway_schema_history table.
+ * <p>
+ * This guard is only active for PostgreSQL (production-like) environments.
+ * It is disabled for the 'test' profile which uses H2.
  */
 @Component
+@Profile("!test")
 public final class SchemaCompatibilityStartupGuard implements ApplicationRunner {
     private final JdbcTemplate jdbc;
 
