@@ -2,6 +2,7 @@
 package com.richcomes.garage.inventory.stockmovement.entity;
 
 import com.richcomes.garage.inventory.stockitem.entity.StockItem;
+import com.richcomes.garage.inventory.store.entity.StoreLocation;
 import com.richcomes.garage.inventory.stockmovement.enums.StockTransactionType;
 
 import jakarta.persistence.*;
@@ -20,6 +21,15 @@ public class StockTransaction {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "stock_item_id", nullable = false)
     private StockItem stockItem;
+
+    // Nullable for historical records whose source store is unknown.
+    // New store-specific movements always set this relation.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = "store_location_id",
+            foreignKey = @ForeignKey(name = "fk_stock_transactions_store_location")
+    )
+    private StoreLocation storeLocation;
 
     @Enumerated(EnumType.STRING)
     @Column(
@@ -95,6 +105,14 @@ public class StockTransaction {
 
     public void setStockItem(StockItem stockItem) {
         this.stockItem = stockItem;
+    }
+
+    public StoreLocation getStoreLocation() {
+        return storeLocation;
+    }
+
+    public void setStoreLocation(StoreLocation storeLocation) {
+        this.storeLocation = storeLocation;
     }
 
     public StockTransactionType getTransactionType() {

@@ -42,6 +42,19 @@ public class StockMovementController {
         return stockMovementService.getItemTransactions(itemId);
     }
 
+    // GET ALL TRANSACTIONS FOR ONE STORE.
+    @GetMapping("/store/{storeId}")
+    public List<StockMovementResponse> getStoreTransactions(@PathVariable Long storeId) {
+        return stockMovementService.getStoreTransactions(storeId);
+    }
+
+    // GET ONE ITEM'S TRANSACTIONS IN ONE STORE.
+    @GetMapping("/item/{itemId}/store/{storeId}")
+    public List<StockMovementResponse> getItemStoreTransactions(
+            @PathVariable Long itemId, @PathVariable Long storeId) {
+        return stockMovementService.getItemStoreTransactions(itemId, storeId);
+    }
+
     // RECORD CONTROLLED STOCK MOVEMENT
     // GRN and Job Card stock movements must use their
     // own trusted backend service flows, not this endpoint.
