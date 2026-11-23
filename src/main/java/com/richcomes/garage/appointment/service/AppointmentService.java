@@ -24,6 +24,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -426,6 +427,42 @@ public class AppointmentService {
     public List<AppointmentResponse> getAllAppointments() {
 
         return appointmentRepository.findAll()
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<AppointmentResponse> getTodayApprovedAppointments() {
+
+        LocalDate today = LocalDate.now(ZoneId.of("Asia/Colombo"));
+
+        return appointmentRepository
+                .findByConfirmedDateAndStatusOrderByAppointmentTimeAscIdAsc(
+                        today,
+                        AppointmentStatus.APPROVED
+                )
+                .stream()
+                .map(this::mapToResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<AppointmentResponse> getApprovedAppointmentsByConfirmedDate(
+            LocalDate confirmedDate) {
+
+        if (confirmedDate == null) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Confirmed date is required"
+            );
+        }
+
+        return appointmentRepository
+                .findByConfirmedDateAndStatusOrderByAppointmentTimeAscIdAsc(
+                        confirmedDate,
+                        AppointmentStatus.APPROVED
+                )
                 .stream()
                 .map(this::mapToResponse)
                 .toList();

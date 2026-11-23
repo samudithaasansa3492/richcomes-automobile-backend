@@ -44,8 +44,16 @@ public interface AppointmentRepository
             Long vehicleId
     );
 
+    List<Appointment>
+    findByConfirmedDateAndStatusOrderByAppointmentTimeAscIdAsc(
+            LocalDate confirmedDate,
+            AppointmentStatus status
+    );
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT a FROM Appointment a WHERE a.id = :id")
-    Optional<Appointment> findByIdForUpdate(@Param("id") Long id);
+    Optional<Appointment> findByIdForUpdate(
+            @Param("id") Long id
+    );
 
 }
