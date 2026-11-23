@@ -40,7 +40,7 @@ class V28HistoryTests(unittest.TestCase):
     def test_v29_requires_separate_review(self):
         rows = observed.splitlines()
         rows.append("29,29,V29__unreviewed.sql,123,t")
-        self.assertTrue(module.verify("\\n".join(rows), expected_latest=28))
+        self.assertTrue(module.verify("\n".join(rows), expected_latest=28))
 
     def test_v14_default_remains_unchanged(self):
         archived = (folder / "fixtures/v14-applied-flyway-history.csv").read_text()
