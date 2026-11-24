@@ -83,7 +83,7 @@ public final class DatabaseSafetyGuard implements EnvironmentPostProcessor, Orde
                     || !Set.of("none", "validate", "create-drop").contains(ddl))
                 fail("H2 tests require the fixed in-memory database and matching H2 settings");
         } else {
-            if (!pgOptIn || !url.matches("^jdbc:postgresql://127\\\\.0\\\\.0\\\\.1:[0-9]{1,5}/richcomes_context\\\\?sslmode=disable$")
+            if (!pgOptIn || !url.matches("^jdbc:postgresql://127[.]0[.]0[.]1:[0-9]{1,5}/richcomes_context[?]sslmode=disable$")
                     || !"org.postgresql.Driver".equals(driver)
                     || !"org.hibernate.dialect.PostgreSQLDialect".equals(dialect)
                     || !"none".equals(ddl))
