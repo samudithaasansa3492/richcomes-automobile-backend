@@ -114,9 +114,9 @@ flyway() {
 verify_count() {
   local db="$1" count
   count="$(docker exec "$CONTAINER" psql -U postgres -d "richcomes_${db}" -Atc \
-    "SELECT COUNT(*) FROM public.flyway_schema_history WHERE success AND version ~ '^[0-9]+$' AND version::int BETWEEN 1 AND 26")"
-  test "$count" = 26 || { echo "FAIL: ${db} migration count=${count}"; exit 1; }
-  echo "PASS: ${db} contains 26 successful Flyway migrations"
+    "SELECT COUNT(*) FROM public.flyway_schema_history WHERE success AND version ~ '^[0-9]+$' AND version::int BETWEEN 1 AND 29")"
+  test "$count" = 29 || { echo "FAIL: ${db} migration count=${count}"; exit 1; }
+  echo "PASS: ${db} contains 29 successful Flyway migrations"
 }
 
 verify_customer_security() {
@@ -269,45 +269,68 @@ verify_inventory_v26() {
   echo "PASS: ${db} V24-V26 multi-store tables, service-part location and OWNER permissions"
 }
 
-verify_v26_backup_roundtrip() {
-  echo '=== Exercise complete V26 backup restore in disposable PostgreSQL ==='
+verify_v27_to_v29_schema() {
+  local db="$1" ok
+  ok="$(docker exec "$CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d "richcomes_${db}" -c "
+    SELECT (SELECT COUNT(*) FROM information_schema.columns
+            WHERE table_schema='garage' AND table_name='customers'
+              AND column_name IN ('sms_consent','mobile_verified','email_consent','email_verified'))=4
+      AND EXISTS(SELECT 1 FROM information_schema.columns
+                 WHERE table_schema='garage' AND table_name='stock_transactions'
+                   AND column_name='store_location_id')
+      AND (SELECT COUNT(*) FROM information_schema.columns
+           WHERE table_schema='garage' AND table_name='appointments'
+             AND column_name IN ('cancellation_reason','cancelled_at',
+                                 'cancelled_by_account_id','cancelled_by_type'))=4
+      AND EXISTS(SELECT 1 FROM pg_constraint
+                 WHERE conrelid='garage.appointments'::regclass
+                   AND conname='chk_appointment_cancellation'
+                   AND pg_get_constraintdef(oid) LIKE '%CANCELLED%')
+  ")"
+  [[ "$ok" == t ]] || { echo "FAIL: ${db} V27-V29 schema missing"; exit 1; }
+  echo "PASS: ${db} V27-V29 customer consent, store location and appointment cancellation"
+}
+
+verify_latest_backup_roundtrip() {
+  echo '=== Exercise complete V29 backup restore in disposable PostgreSQL ==='
   docker exec "$CONTAINER" pg_dump -U postgres -d richcomes_fresh --format=custom \
-    --no-owner --no-acl --schema=garage -f /tmp/garage-v26-ci.dump
+    --no-owner --no-acl --schema=garage -f /tmp/garage-v29-ci.dump
   docker exec "$CONTAINER" pg_dump -U postgres -d richcomes_fresh --format=custom \
-    --no-owner --no-acl --table=public.flyway_schema_history -f /tmp/history-v26-ci.dump
-  docker exec "$CONTAINER" createdb -U postgres richcomes_v26_restore
-  docker exec "$CONTAINER" pg_restore -U postgres -d richcomes_v26_restore \
-    --exit-on-error --no-owner --no-acl /tmp/garage-v26-ci.dump
-  docker exec "$CONTAINER" pg_restore -U postgres -d richcomes_v26_restore \
-    --exit-on-error --no-owner --no-acl /tmp/history-v26-ci.dump
+    --no-owner --no-acl --table=public.flyway_schema_history -f /tmp/history-v29-ci.dump
+  docker exec "$CONTAINER" createdb -U postgres richcomes_v29_restore
+  docker exec "$CONTAINER" pg_restore -U postgres -d richcomes_v29_restore \
+    --exit-on-error --no-owner --no-acl /tmp/garage-v29-ci.dump
+  docker exec "$CONTAINER" pg_restore -U postgres -d richcomes_v29_restore \
+    --exit-on-error --no-owner --no-acl /tmp/history-v29-ci.dump
   docker cp scripts/garage-v26-exact-counts.sql "$CONTAINER:/tmp/garage-v26-exact-counts.sql"
   local before after versions
   before="$(docker exec "$CONTAINER" psql -U postgres -d richcomes_fresh -qAt -v ON_ERROR_STOP=1 \
     -f /tmp/garage-v26-exact-counts.sql)"
-  after="$(docker exec "$CONTAINER" psql -U postgres -d richcomes_v26_restore -qAt -v ON_ERROR_STOP=1 \
+  after="$(docker exec "$CONTAINER" psql -U postgres -d richcomes_v29_restore -qAt -v ON_ERROR_STOP=1 \
     -f /tmp/garage-v26-exact-counts.sql)"
   [[ "$before" =~ ^[0-9]+(:[0-9]+){32}$ && "$before" == "$after" ]] || {
-    echo 'FAIL: V26 source and isolated recovered table counts differ'; exit 1;
+    echo 'FAIL: V29 source and isolated recovered table counts differ'; exit 1;
   }
-  versions="$(docker exec "$CONTAINER" psql -U postgres -d richcomes_v26_restore -qAt \
+  versions="$(docker exec "$CONTAINER" psql -U postgres -d richcomes_v29_restore -qAt \
     -c "SELECT COUNT(*)::text || ':' || max(version::int)::text FROM public.flyway_schema_history
         WHERE success AND version ~ '^[0-9]+$'")"
-  test "$versions" = 26:26 || {
-    echo 'FAIL: recovered V26 Flyway history incomplete'; exit 1;
+  test "$versions" = 29:29 || {
+    echo 'FAIL: recovered V29 Flyway history incomplete'; exit 1;
   }
-  echo 'PASS: V26 garage/history custom-format archive restored, 33 table counts and 26 history match'
+  echo 'PASS: V29 garage/history custom-format archive restored, 33 table counts and 29 history match'
 }
 
-echo '=== Fresh install V1-V26 ==='
+echo '=== Fresh install V1-V29 ==='
 flyway fresh latest
 verify_count fresh
 verify_customer_security fresh
 verify_business_delegation fresh
 verify_browser_denial fresh
 verify_inventory_v26 fresh
-verify_v26_backup_roundtrip
+verify_v27_to_v29_schema fresh
+verify_latest_backup_roundtrip
 
-echo '=== Simulate upgrade V1-V14 to V26 ==='
+echo '=== Simulate upgrade V1-V14 to V29 ==='
 flyway upgrade 14
 verify_isolated_backup_roundtrip
 flyway upgrade 18
@@ -334,6 +357,7 @@ verify_customer_security upgrade
 verify_business_delegation upgrade
 verify_browser_denial upgrade
 verify_inventory_v26 upgrade
+verify_v27_to_v29_schema upgrade
 owner_count="$(docker exec "$CONTAINER" psql -U postgres -d richcomes_upgrade -Atc \
   "SELECT count(*) FROM garage.user_accounts a JOIN garage.user_account_roles ar ON ar.user_account_id=a.id JOIN garage.roles r ON r.id=ar.role_id JOIN garage.employees e ON e.id=a.employee_id WHERE a.username='validation.owner' AND a.enabled AND a.identity_kind='BUSINESS' AND r.code='OWNER' AND e.position='OWNER'")"
 test "$owner_count" = 1 || { echo 'FAIL: synthetic legacy OWNER was not preserved'; exit 1; }
