@@ -20,6 +20,14 @@ import java.util.UUID;
 import java.util.stream.Collectors;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Order;
+import org.junit.jupiter.api.TestMethodOrder;
+import org.junit.jupiter.api.MethodOrderer;
+import org.springframework.http.MediaType;
+import com.jayway.jsonpath.JsonPath;
+import com.richcomes.garage.auth.dto.AccountRolesUpdateRequest;
+import com.richcomes.garage.employee.service.EmployeeService;
+import java.util.concurrent.*;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -29,7 +37,8 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import static org.junit.jupiter.api.Assertions.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -39,6 +48,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 @EnabledIfEnvironmentVariable(named = "RICHCOMES_LOCAL_PG_TESTS", matches = "YES")
 class CashierPermissionPostgresIT {
     @Autowired DataSource dataSource;
@@ -52,8 +62,10 @@ class CashierPermissionPostgresIT {
     @Autowired UserAccountService staffAccounts;
     @Autowired AccessTokenService tokenService;
     @Autowired MockMvc mvc;
+    @Autowired EmployeeService employeeService;
 
     @Test
+    @Order(3)
     void committedGrantAndAuditRollbackAndRevokeAreAtomicInRealPostgres() throws Exception {
         assertIsolatedPostgres();
         var tx = new TransactionTemplate(transactions);
@@ -161,6 +173,155 @@ class CashierPermissionPostgresIT {
                  WHERE target_account_id = ? AND permission_code = 'report:read'
                 """, Boolean.class, target));
     }
+
+
+    @Test
+    @Order(1)
+    void accountLifecycleAndSelfProtectionOverSignedJwtHttp() throws Exception {
+        assertIsolatedPostgres();
+        assertEquals(0L, accounts.countActiveOwners(), "Expected fresh isolated fixture");
+        var owner = createOwnerFixture();
+        String ownerBearer = "Bearer " + tokenService.issue(owner.id()).accessToken();
+        var employee = employees.saveAndFlush(staff("CASHIER", EmployeePosition.CASHIER));
+        String username = uniqueUsername("lifecycle");
+        String password = UUID.randomUUID().toString();
+        String login = """
+                {"username":"%s","password":"%s"}
+                """.formatted(username, password);
+        Long target = null;
+        try {
+            mvc.perform(post("/api/accounts").header("Authorization", ownerBearer)
+                            .contentType(MediaType.APPLICATION_JSON).content("""
+                            {"employeeId":"%s","username":"%s","password":"%s","roleCodes":["CASHIER"]}
+                            """.formatted(employee.getId(), username, password)))
+                    .andExpect(status().isCreated()).andExpect(jsonPath("$.enabled").value(false))
+                    .andExpect(jsonPath("$.password").doesNotExist())
+                    .andExpect(jsonPath("$.passwordHash").doesNotExist());
+            target = accounts.findByUsername(username).orElseThrow().getId();
+            mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON).content(login))
+                    .andExpect(status().isUnauthorized());
+            mvc.perform(get("/api/accounts/{id}", target).header("Authorization", ownerBearer))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.username").value(username));
+            mvc.perform(get("/api/accounts").param("page", "0").param("size", "1")
+                            .header("Authorization", ownerBearer))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.page").value(0)).andExpect(jsonPath("$.size").value(1));
+            mvc.perform(get("/api/accounts").param("page", "1").param("size", "1")
+                            .header("Authorization", ownerBearer))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(1))
+                    .andExpect(jsonPath("$.page").value(1));
+            mvc.perform(get("/api/accounts").param("size", "0").header("Authorization", ownerBearer))
+                    .andExpect(status().isBadRequest());
+            mvc.perform(patch("/api/accounts/{id}/enable", target).header("Authorization", ownerBearer))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.enabled").value(true));
+            String response = mvc.perform(post("/api/auth/login")
+                            .contentType(MediaType.APPLICATION_JSON).content(login))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.accessToken").isString())
+                    .andReturn().getResponse().getContentAsString();
+            String bearer = "Bearer " + JsonPath.<String>read(response, "$.accessToken");
+            mvc.perform(get("/api/accounts").header("Authorization", bearer))
+                    .andExpect(status().isForbidden());
+            mvc.perform(put("/api/accounts/{id}/roles", target).header("Authorization", ownerBearer)
+                            .contentType(MediaType.APPLICATION_JSON).content("{\"roleCodes\":[\"OWNER\"]}"))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.roleCodes[0]").value("OWNER"));
+            mvc.perform(get("/api/accounts").header("Authorization", bearer)).andExpect(status().isOk());
+            mvc.perform(put("/api/accounts/{id}/roles", target).header("Authorization", ownerBearer)
+                            .contentType(MediaType.APPLICATION_JSON).content("{\"roleCodes\":[\"CASHIER\"]}"))
+                    .andExpect(status().isOk());
+            mvc.perform(get("/api/accounts").header("Authorization", bearer)).andExpect(status().isForbidden());
+            mvc.perform(patch("/api/accounts/{id}/disable", owner.id()).header("Authorization", ownerBearer))
+                    .andExpect(status().is4xxClientError()).andExpect(jsonPath("$.code").value("SELF_MODIFICATION"));
+            mvc.perform(put("/api/accounts/{id}/roles", owner.id()).header("Authorization", ownerBearer)
+                            .contentType(MediaType.APPLICATION_JSON).content("{\"roleCodes\":[\"CASHIER\"]}"))
+                    .andExpect(status().is4xxClientError()).andExpect(jsonPath("$.code").value("SELF_MODIFICATION"));
+            mvc.perform(patch("/api/employees/{id}/deactivate", owner.employeeId())
+                            .header("Authorization", ownerBearer))
+                    .andExpect(status().is4xxClientError()).andExpect(jsonPath("$.code").value("SELF_MODIFICATION"));
+            mvc.perform(patch("/api/accounts/{id}/disable", target).header("Authorization", ownerBearer))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.enabled").value(false));
+            mvc.perform(get("/api/auth/me").header("Authorization", bearer))
+                    .andExpect(status().isUnauthorized());
+            assertEquals(1L, accounts.countActiveOwners());
+            assertFalse(accounts.findById(target).orElseThrow().isEnabled());
+        } finally {
+            // Only this test's synthetic rows in the guarded, throwaway database.
+            if (target != null) sql.update("UPDATE garage.user_accounts SET enabled=false WHERE id=?", target);
+            sql.update("UPDATE garage.user_accounts SET enabled=false WHERE id=?", owner.id());
+        }
+    }
+
+    @Test
+    @Order(2)
+    void competingOwnerRemovalPathsPreserveExactlyOneActiveOwnerInPostgres() throws Exception {
+        assertIsolatedPostgres();
+        for (Removal[] pair : java.util.List.of(
+                new Removal[]{Removal.DISABLE, Removal.ROLE},
+                new Removal[]{Removal.DISABLE, Removal.EMPLOYEE},
+                new Removal[]{Removal.ROLE, Removal.EMPLOYEE},
+                new Removal[]{Removal.DISABLE, Removal.DISABLE},
+                new Removal[]{Removal.ROLE, Removal.ROLE},
+                new Removal[]{Removal.EMPLOYEE, Removal.EMPLOYEE})) {
+            assertEquals(0L, accounts.countActiveOwners(), "Unexpected active owner outside test fixture");
+            var first = createOwnerFixture();
+            var second = createOwnerFixture();
+            assertEquals(2L, accounts.countActiveOwners());
+            var executor = Executors.newFixedThreadPool(2);
+            var start = new CyclicBarrier(2);
+            try {
+                var a = executor.submit(() -> removeOwner(start, first, second, pair[0]));
+                var b = executor.submit(() -> removeOwner(start, second, first, pair[1]));
+                var results = java.util.List.of(a.get(20, TimeUnit.SECONDS), b.get(20, TimeUnit.SECONDS));
+                assertEquals(1L, results.stream().filter("REMOVED"::equals).count(),
+                        "Exactly one operation must succeed: " + java.util.Arrays.toString(pair));
+                assertEquals(1L, results.stream().filter("LAST_ACTIVE_OWNER"::equals).count(),
+                        "Other operation must be rejected by last-owner guard");
+                assertEquals(1L, accounts.countActiveOwners());
+                // Independent SQL check for this fixture (no technical or mixed roles).
+                assertEquals(1, sql.queryForObject("""
+                        SELECT count(*) FROM garage.user_accounts a
+                        JOIN garage.employees e ON e.id=a.employee_id
+                        JOIN garage.user_account_roles ar ON ar.user_account_id=a.id
+                        JOIN garage.roles r ON r.id=ar.role_id
+                        WHERE a.id IN (?,?) AND a.enabled AND e.active AND r.code='OWNER'
+                        """, Integer.class, first.id(), second.id()));
+            } finally {
+                executor.shutdownNow();
+                assertTrue(executor.awaitTermination(10, TimeUnit.SECONDS));
+                sql.update("UPDATE garage.user_accounts SET enabled=false WHERE id IN (?,?)",
+                        first.id(), second.id());
+            }
+        }
+    }
+
+    private OwnerFixture createOwnerFixture() {
+        return new TransactionTemplate(transactions).execute(status -> {
+            var employee = employees.saveAndFlush(staff("OWNER", EmployeePosition.OWNER));
+            var account = new UserAccount(employee, uniqueUsername("owner"), "synthetic-test-hash");
+            account.assignRole(roles.findByCode("OWNER").orElseThrow());
+            account.enable();
+            return new OwnerFixture(accounts.saveAndFlush(account).getId(), employee.getId());
+        });
+    }
+
+    private String removeOwner(CyclicBarrier start, OwnerFixture target, OwnerFixture actor, Removal action)
+            throws Exception {
+        start.await(10, TimeUnit.SECONDS);
+        try {
+            // Production transactional services, not a mocked guard or direct SQL mutation.
+            switch (action) {
+                case DISABLE -> staffAccounts.disableAccount(target.id(), actor.id());
+                case ROLE -> staffAccounts.replaceRoles(target.id(),
+                        new AccountRolesUpdateRequest(Set.of("CASHIER")), actor.id());
+                case EMPLOYEE -> employeeService.deactivateEmployee(target.employeeId(), actor.id());
+            }
+            return "REMOVED";
+        } catch (AccountOperationException failure) {
+            return failure.getCode().name();
+        }
+    }
+
+    private enum Removal { DISABLE, ROLE, EMPLOYEE }
+    private record OwnerFixture(Long id, UUID employeeId) {}
 
     private void assertIsolatedPostgres() throws SQLException {
         try (var connection = dataSource.getConnection()) {
