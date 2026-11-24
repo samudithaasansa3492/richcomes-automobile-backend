@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Verify immutable applied V1-V14 Flyway names/checksums against Git-tracked SQL.
+"""Verify immutable applied Flyway names/checksums up to a version-locked target.
 
 Consumes only non-sensitive CSV metadata from the database's flyway_schema_history.
 No network, no DB credentials, no Flyway startup and no schema mutations.
@@ -86,7 +86,7 @@ def main() -> int:
         "--history-csv", type=str, default="-",
         help="CSV file from read-only catalog COPY query, or '-' to read stdin",
     )
-    parser.add_argument('--expected-version', type=int, choices=(14, 26), default=14,
+    parser.add_argument('--expected-version', type=int, choices=(14, 26, 28), default=14,
                         help='Exact frozen source migration upper bound; default V14 for historical archives')
     args = parser.parse_args()
     try:

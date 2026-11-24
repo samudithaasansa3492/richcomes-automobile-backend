@@ -65,6 +65,13 @@ jobs:
           bash -n scripts/test-offsite-v26-backup-guards.sh
           bash scripts/test-offsite-v26-backup-guards.sh
           python3 scripts/test-flyway-v26-history-preflight.py
+          # V28-specific backup guards: offline only, no production credentials.
+          bash -n scripts/backup-garage-v28-with-restore-rehearsal.sh
+          bash -n scripts/railway-offsite-v28-backup.sh
+          bash -n scripts/check-shared-flyway-v28-readonly.sh
+          bash -n scripts/test-offsite-v28-backup-guards.sh
+          bash scripts/test-offsite-v28-backup-guards.sh
+          python3 scripts/test-flyway-v28-history-preflight.py
           # Source-driven Flyway version policy; V1-V28 checksums are immutable.
           python3 scripts/check-flyway-source-versions.py
           python3 scripts/test-flyway-source-policy.py
