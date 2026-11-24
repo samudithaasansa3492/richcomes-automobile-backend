@@ -770,6 +770,43 @@ verify_latest_backup_roundtrip() {
         exit 1
     }
 
+    # The frozen V26 fixture checks the original 33 tables. Also compare ALL
+    # present garage tables so future source migrations adding new tables cannot
+    # silently fall outside the disposable restore verification.
+    local source_tables recovered_tables table source_rows recovered_rows checked
+    source_tables="$(docker exec "$CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 \
+        -U postgres -d richcomes_fresh -c \
+        "SELECT tablename FROM pg_tables WHERE schemaname='garage' ORDER BY tablename")"
+    recovered_tables="$(docker exec "$CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 \
+        -U postgres -d richcomes_latest_restore -c \
+        "SELECT tablename FROM pg_tables WHERE schemaname='garage' ORDER BY tablename")"
+    [[ -n "$source_tables" && "$source_tables" == "$recovered_tables" ]] || {
+        echo 'FAIL: source and recovered garage table sets differ'
+        exit 1
+    }
+    checked=0
+    while IFS= read -r table; do
+        [[ "$table" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || {
+            echo 'FAIL: unexpected garage table identifier in disposable restore'
+            exit 1
+        }
+        source_rows="$(docker exec "$CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 \
+            -U postgres -d richcomes_fresh -c "SELECT COUNT(*) FROM garage.$table")"
+        recovered_rows="$(docker exec "$CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 \
+            -U postgres -d richcomes_latest_restore -c "SELECT COUNT(*) FROM garage.$table")"
+        [[ "$source_rows" =~ ^[0-9]+$ && "$source_rows" == "$recovered_rows" ]] || {
+            echo "FAIL: recovered garage.$table has a different row count"
+            exit 1
+        }
+        checked=$((checked + 1))
+    done <<< "$source_tables"
+    [[ "$checked" -ge 33 ]] || {
+        echo "FAIL: expected at least 33 garage tables, got $checked"
+        exit 1
+    }
+    echo "PASS: all $checked current garage tables and row counts match isolated restore"
+
+
     versions="$(docker exec "$CONTAINER" \
         psql -U postgres -d richcomes_latest_restore \
         -qAt -v ON_ERROR_STOP=1 -c "
