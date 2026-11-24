@@ -257,7 +257,7 @@ class IdentityPersistenceTest {
             factory.setDataSource(dataSource);
             factory.setPackagesToScan("com.richcomes.garage.auth.entity", "com.richcomes.garage.employee.entity", "com.richcomes.garage.customer.entity");
             factory.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
-            factory.setJpaPropertyMap(Map.of("hibernate.hbm2ddl.auto", "create-drop"));
+            factory.setJpaPropertyMap(Map.of("hibernate.hbm2ddl.auto", "create-drop", "hibernate.default_schema", "garage", "hibernate.hbm2ddl.halt_on_error", "true"));
             return factory;
         }
 

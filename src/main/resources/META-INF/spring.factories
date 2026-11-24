@@ -1,0 +1,5 @@
+org.springframework.boot.EnvironmentPostProcessor=\
+com.richcomes.garage.config.DatabaseSafetyGuard$TestDefaults,\
+com.richcomes.garage.config.DatabaseSafetyGuard
+org.springframework.context.ApplicationContextInitializer=\
+com.richcomes.garage.config.DatabaseSafetyGuard$FinalCheck
