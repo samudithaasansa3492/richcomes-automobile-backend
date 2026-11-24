@@ -53,6 +53,27 @@ public class AppointmentController {
         );
     }
 
+    @GetMapping("/today")
+    public ResponseEntity<List<AppointmentResponse>> getTodayApprovedAppointments() {
+
+        return ResponseEntity.ok(
+                appointmentService.getTodayApprovedAppointments()
+        );
+    }
+
+    @GetMapping("/schedule")
+    public ResponseEntity<List<AppointmentResponse>> getApprovedAppointmentsByConfirmedDate(
+            @RequestParam("date")
+            @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+            LocalDate confirmedDate) {
+
+        return ResponseEntity.ok(
+                appointmentService.getApprovedAppointmentsByConfirmedDate(
+                        confirmedDate
+                )
+        );
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<AppointmentResponse> getAppointmentById(
             @PathVariable Long id) {
@@ -96,7 +117,9 @@ public class AppointmentController {
             @PathVariable String vehicleNumber) {
 
         return ResponseEntity.ok(
-                appointmentService.getAppointmentsByVehicleNumber(vehicleNumber)
+                appointmentService.getAppointmentsByVehicleNumber(
+                        vehicleNumber
+                )
         );
     }
 
