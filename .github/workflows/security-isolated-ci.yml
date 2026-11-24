@@ -64,6 +64,12 @@ jobs:
           bash -n scripts/test-offsite-v26-backup-guards.sh
           bash scripts/test-offsite-v26-backup-guards.sh
           python3 scripts/test-flyway-v26-history-preflight.py
+          # Verify that the PR includes exactly the reviewed V1-V29 source files.
+          python3 scripts/check-flyway-source-versions.py
+          bash -n scripts/prepare-isolated-context-schema.sh
+          bash -n scripts/validate-spring-context-isolated.sh
+          bash -n scripts/team-dev.sh
+          bash -n scripts/seed-team-dev-accounts.sh
 
       - name: Validate recovery client security flows (no network or secrets)
         shell: bash
