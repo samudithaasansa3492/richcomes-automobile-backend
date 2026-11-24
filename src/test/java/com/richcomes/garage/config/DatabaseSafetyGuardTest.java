@@ -20,6 +20,8 @@ class DatabaseSafetyGuardTest {
         e.setActiveProfiles("isolated-pg");
         return e.withProperty("spring.datasource.url", "jdbc:postgresql://127.0.0.1:54321/richcomes_context?sslmode=disable")
                 .withProperty("spring.datasource.driver-class-name", "org.postgresql.Driver")
+                .withProperty("spring.datasource.username", "postgres")
+                .withProperty("spring.datasource.password", "synthetic-1-2-3")
                 .withProperty("spring.jpa.properties.hibernate.dialect", "org.hibernate.dialect.PostgreSQLDialect")
                 .withProperty("spring.jpa.hibernate.ddl-auto", "none");
     }
@@ -41,8 +43,26 @@ class DatabaseSafetyGuardTest {
         }
         assertTrue(guarded, "Expected registered pre-start safety guard");
     }
-    @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
     static class EmptyApplication {}
+
+    @Test void defaultBootTestProfileIgnoresGenericEnvAndLocalDotenv() throws Exception {
+        var app = new org.springframework.boot.SpringApplication(EmptyApplication.class);
+        app.setWebApplicationType(org.springframework.boot.WebApplicationType.NONE);
+        try (var ctx = app.run()) {
+            var env = ctx.getEnvironment();
+            assertTrue(env.acceptsProfiles(org.springframework.core.env.Profiles.of("test")));
+            assertEquals(DatabaseSafetyGuard.H2_URL, env.getProperty("spring.datasource.url"));
+            assertEquals("org.h2.Driver", env.getProperty("spring.datasource.driver-class-name"));
+            assertEquals("sa", env.getProperty("spring.datasource.username"));
+            assertEquals("", env.getProperty("spring.datasource.password"));
+            assertFalse(env.getProperty("spring.flyway.enabled", Boolean.class, true));
+            assertNull(env.getProperty("richcomes.test.dotenv-marker"),
+                    "Local .env must not be imported on test classpath");
+            try (var connection = java.sql.DriverManager.getConnection(DatabaseSafetyGuard.H2_URL, "sa", "")) {
+                assertEquals("H2", connection.getMetaData().getDatabaseProductName());
+            }
+        }
+    }
 
     @Test void fixedH2IgnoresGenericProductionEnvironmentVariables() {
         assertDoesNotThrow(() -> DatabaseSafetyGuard.verify(h2().withProperty("DB_URL", "jdbc:postgresql://external.invalid/postgres")
@@ -62,6 +82,8 @@ class DatabaseSafetyGuardTest {
     @Test void isolatedPostgresRequiresOptInExactTargetAndMatchingDialect() {
         assertDoesNotThrow(() -> DatabaseSafetyGuard.verify(pg(), true, true));
         assertThrows(IllegalStateException.class, () -> DatabaseSafetyGuard.verify(pg(), true, false));
+        assertThrows(IllegalStateException.class, () -> DatabaseSafetyGuard.verify(pg().withProperty("spring.datasource.password", "not-generated-by-runner"), true, true));
+        assertThrows(IllegalStateException.class, () -> DatabaseSafetyGuard.verify(pg().withProperty("spring.jpa.database-platform", "org.hibernate.dialect.H2Dialect"), true, true));
         assertThrows(IllegalStateException.class, () -> DatabaseSafetyGuard.verify(pg().withProperty("spring.datasource.url", "jdbc:postgresql://external.invalid/postgres"), true, true));
         assertThrows(IllegalStateException.class, () -> DatabaseSafetyGuard.verify(pg().withProperty("spring.jpa.hibernate.ddl-auto", "create-drop"), true, true));
         assertThrows(IllegalStateException.class, () -> DatabaseSafetyGuard.verify(pg().withProperty("spring.jpa.properties.hibernate.dialect", "org.hibernate.dialect.H2Dialect"), true, true));

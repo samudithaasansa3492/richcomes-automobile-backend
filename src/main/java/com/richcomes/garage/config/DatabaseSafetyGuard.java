@@ -28,6 +28,9 @@ public final class DatabaseSafetyGuard implements EnvironmentPostProcessor, Orde
         @Override public int getOrder() { return ConfigDataEnvironmentPostProcessor.ORDER - 1; }
         @Override public void postProcessEnvironment(ConfigurableEnvironment env, SpringApplication app) {
             if (testRuntime()) {
+                if (env.getActiveProfiles().length > 0
+                        && !env.acceptsProfiles(Profiles.of("test", "isolated-pg")))
+                    fail("External runtime profiles are prohibited on the test classpath");
                 env.getPropertySources().addFirst(new MapPropertySource("richcomes-test-defaults",
                         Map.of("spring.profiles.default", "test")));
             }
@@ -57,6 +60,8 @@ public final class DatabaseSafetyGuard implements EnvironmentPostProcessor, Orde
         String alias = property(env, "spring.jpa.properties.hibernate.hbm2ddl.auto", "none");
         String jpaAction = property(env, "spring.jpa.properties.jakarta.persistence.schema-generation.database.action", "none");
         String legacyAction = property(env, "spring.jpa.properties.javax.persistence.schema-generation.database.action", "none");
+        if (env.getProperty("spring.jpa.generate-ddl", Boolean.class, false))
+            fail("Implicit JPA schema generation is prohibited");
         if (!Set.of("none", "validate").contains(alias) || !"none".equals(jpaAction) || !"none".equals(legacyAction))
             fail("Direct Hibernate/JPA schema generation overrides are prohibited");
         if (!h2 && !Set.of("none", "validate").contains(ddl))
@@ -67,11 +72,15 @@ public final class DatabaseSafetyGuard implements EnvironmentPostProcessor, Orde
         String dialect = env.getProperty("spring.jpa.properties.hibernate.dialect", "");
         for (String key : Set.of("spring.datasource.jndi-name", "spring.datasource.hikari.jdbc-url",
                 "spring.datasource.hikari.data-source-class-name", "spring.datasource.hikari.data-source-jndi",
-                "spring.flyway.url", "spring.jpa.properties.hibernate.connection.url",
+                "spring.flyway.url", "spring.datasource.type", "spring.jpa.properties.hibernate.connection.url",
                 "spring.jpa.properties.hibernate.connection.datasource",
+                "spring.jpa.properties.hibernate.connection.provider_class",
+                "spring.jpa.properties.javax.persistence.jdbc.url",
                 "spring.jpa.properties.jakarta.persistence.jdbc.url")) {
             if (!env.getProperty(key, "").isBlank()) fail("Alternate database targets are prohibited in tests");
         }
+        String platform = env.getProperty("spring.jpa.database-platform", "");
+        if (!platform.isBlank() && !platform.equals(dialect)) fail("Conflicting JPA database platform");
         if (!"never".equals(property(env, "spring.sql.init.mode", "never")))
             fail("External SQL initialization is prohibited in tests");
         if (h2) {
@@ -86,6 +95,8 @@ public final class DatabaseSafetyGuard implements EnvironmentPostProcessor, Orde
             if (!pgOptIn || !url.matches("^jdbc:postgresql://127[.]0[.]0[.]1:[0-9]{1,5}/richcomes_context[?]sslmode=disable$")
                     || !"org.postgresql.Driver".equals(driver)
                     || !"org.hibernate.dialect.PostgreSQLDialect".equals(dialect)
+                    || !"postgres".equals(env.getProperty("spring.datasource.username", ""))
+                    || !env.getProperty("spring.datasource.password", "").matches("synthetic-[0-9]+-[0-9]+-[0-9]+")
                     || !"none".equals(ddl))
                 fail("PostgreSQL tests require explicit disposable localhost runner and ddl-auto=none");
         }

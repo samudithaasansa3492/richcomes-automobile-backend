@@ -8,3 +8,5 @@ Shared database is quarantined pending recovery. Do not use old checkout test co
 - Startup safety guard runs before ordinary datasource/Hibernate/Flyway initialization. Direct external overrides, alternate targets and non-test Hibernate schema mutations fail closed; do not bypass it. Production Flyway remains disabled by default. Test profiles do not import .env.
 - Direct embedded auth fixtures use the garage default schema and halt on DDL errors; no shared database connections are used.
 - This is prevention, not data recovery. Preserve Flyway history and obtain a verified pre-incident backup; restore to a separate authorized target first. Do not run repair, clean, reapply migrations, reset, or restore in place until the owner approves a recovery plan.
+
+The independent database-safety CI job uses only deliberately invalid loopback JDBC values and a synthetic `.env` to prove H2 isolation while the full migration job remains independently mandatory. It is not a substitute for full PostgreSQL or migration validation.
