@@ -23,6 +23,27 @@ class DatabaseSafetyGuardTest {
                 .withProperty("spring.jpa.properties.hibernate.dialect", "org.hibernate.dialect.PostgreSQLDialect")
                 .withProperty("spring.jpa.hibernate.ddl-auto", "none");
     }
+    @Test void registeredGuardRejectsUnsafeBootStartupBeforeAnyBeanCreation() {
+        var app = new org.springframework.boot.SpringApplication(EmptyApplication.class);
+        app.setWebApplicationType(org.springframework.boot.WebApplicationType.NONE);
+        var failure = assertThrows(Exception.class, () -> {
+            try (var ignored = app.run("--spring.profiles.active=test",
+                    "--spring.datasource.url=jdbc:postgresql://127.0.0.1:1/forbidden",
+                    "--spring.jpa.hibernate.ddl-auto=create-drop")) {
+                fail("Unsafe configuration unexpectedly started");
+            }
+        });
+        boolean guarded = false;
+        for (Throwable t = failure; t != null; t = t.getCause()) {
+            if (t.getMessage() != null && t.getMessage().contains("DATABASE SAFETY STOP")) {
+                guarded = true; break;
+            }
+        }
+        assertTrue(guarded, "Expected registered pre-start safety guard");
+    }
+    @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
+    static class EmptyApplication {}
+
     @Test void fixedH2IgnoresGenericProductionEnvironmentVariables() {
         assertDoesNotThrow(() -> DatabaseSafetyGuard.verify(h2().withProperty("DB_URL", "jdbc:postgresql://external.invalid/postgres")
                 .withProperty("DB_PASSWORD", "not-a-real-secret").withProperty("FLYWAY_ENABLED", "true"), true, false));
