@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# CI-only V29 migration preflight. The caller creates a disposable localhost PostgreSQL.
+# CI-only source-derived migration preflight. The caller creates a disposable localhost PostgreSQL.
 # No shared Supabase or Railway connections. Guard remains enabled in the application.
 set -euo pipefail
 set +x
@@ -27,6 +27,13 @@ command -v docker >/dev/null
 binding="$(docker port "$name" 5432/tcp)"
 [[ "$binding" == "127.0.0.1:$port" ]] ||
   { echo "STOP: CI Postgres port is not localhost-only" >&2; exit 2; }
+
+latest="$(python3 scripts/check-flyway-source-versions.py --latest)" || {
+  echo "FAIL: source migration audit did not validate" >&2
+  exit 1
+}
+[[ "$latest" =~ ^[0-9]+$ && "$latest" -ge 28 ]] ||
+  { echo "STOP: missing verified applied source baseline" >&2; exit 2; }
 
 url="jdbc:postgresql://127.0.0.1:${port}/richcomes_context?sslmode=disable"
 mkdir -p "$workdir/libs"
@@ -74,8 +81,8 @@ history="$(docker exec "$name" psql -X -qAt -v ON_ERROR_STOP=1 \
   -U postgres -d richcomes_context -c \
   "SELECT COUNT(*)::text || ':' || MAX(version::int)::text
    FROM public.flyway_schema_history WHERE success AND version ~ '^[0-9]+$'")"
-[[ "$history" == 29:29 ]] ||
-  { echo "FAIL: expected exactly V1-V29 migrations in disposable CI, found $history"; exit 1; }
+[[ "$history" == "$latest:$latest" ]] ||
+  { echo "FAIL: expected exactly V1-V$latest migrations in disposable CI, found $history"; exit 1; }
 
 # Exact schema metadata needed by the *unchanged* SchemaCompatibilityStartupGuard.
 # Include V29 appointment cancellation constraint to detect partial migrations.
@@ -92,11 +99,13 @@ guard_ready="$(docker exec "$name" psql -X -qAt -v ON_ERROR_STOP=1 \
          WHERE conrelid=to_regclass('garage.recovery_challenges')
            AND conname='recovery_challenges_purpose_check'
            AND pg_get_constraintdef(oid) LIKE '%INITIAL_PASSWORD%')
-       AND EXISTS (SELECT 1 FROM pg_constraint
+       AND (
+         $latest < 29 OR EXISTS (SELECT 1 FROM pg_constraint
          WHERE conrelid=to_regclass('garage.appointments')
            AND conname='chk_appointment_cancellation'
            AND pg_get_constraintdef(oid) LIKE '%CANCELLED%')
+       )
     ")"
 [[ "$guard_ready" == t ]] ||
-  { echo "FAIL: V23 security guard metadata or V29 appointment constraints absent"; exit 1; }
-echo "PASS: CI-only V1-V29 Flyway history, V23 guard and V29 cancellation schema verified"
+  { echo "FAIL: V23 security metadata or required post-V28 schema constraints absent"; exit 1; }
+echo "PASS: CI-only V1-V$latest Flyway history and V23 security schema verified"

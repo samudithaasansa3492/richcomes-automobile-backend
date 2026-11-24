@@ -199,9 +199,10 @@ echo "PASS: disposable PostgreSQL and Supabase NOLOGIN role fixtures"
 
 URL="jdbc:postgresql://127.0.0.1:${port}/richcomes_context?sslmode=disable"
 
-# On Linux CI, migrate ONLY this throwaway localhost database before Spring's
-# ApplicationRunner executes; never disable SchemaCompatibilityStartupGuard.
-# Preserve existing Windows Git Bash in-app Flyway behavior.
+# On Linux CI, run Flyway to the source-derived version on the disposable
+# localhost PostgreSQL BEFORE ApplicationRunner. The production compatibility
+# guard stays active. Windows Git Bash retains the existing Flyway startup
+# behavior until the pre-migration helper is Windows-validated.
 SPRING_FLYWAY_FLAG=true
 if [[ "${OSTYPE:-}" != msys* && "${OSTYPE:-}" != cygwin* ]]; then
     bash scripts/prepare-isolated-context-schema.sh "$NAME" "$port" "$DB_PASSWORD" "$ROOT"

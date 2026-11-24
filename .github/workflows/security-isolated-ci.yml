@@ -16,6 +16,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: richcomes-security-${{ github.workflow }}-${{ github.ref }}
@@ -64,12 +65,27 @@ jobs:
           bash -n scripts/test-offsite-v26-backup-guards.sh
           bash scripts/test-offsite-v26-backup-guards.sh
           python3 scripts/test-flyway-v26-history-preflight.py
-          # Exact PR source set and new CI-only schema preparation; no live database.
+          # Source-driven Flyway version policy; V1-V28 checksums are immutable.
           python3 scripts/check-flyway-source-versions.py
+          python3 scripts/test-flyway-source-policy.py
+          python3 scripts/test-pr-flyway-collisions.py
+          python3 -m py_compile scripts/check-pr-flyway-collisions.py scripts/check-flyway-source-versions.py
           bash -n scripts/prepare-isolated-context-schema.sh
           bash -n scripts/validate-spring-context-isolated.sh
           bash -n scripts/team-dev.sh
           bash -n scripts/seed-team-dev-accounts.sh
+
+      # Read-only API check: catches two still-open PRs claiming V30 etc.
+      # Not a substitute for coordination of unpushed/unopened branches.
+      - name: Reject migration versions already claimed by another open PR
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          python3 scripts/check-pr-flyway-collisions.py
 
       - name: Validate recovery client security flows (no network or secrets)
         shell: bash
