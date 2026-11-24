@@ -23,6 +23,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  database-safety:
+    name: Database safety / poisoned environment regression
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Prove unit tests cannot inherit shared database settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e .env
+          trap 'rm -f .env' EXIT
+          # Fake loopback target only; no real secrets or database server.
+          printf '%s\n' 'DB_URL=jdbc:postgresql://127.0.0.1:1/forbidden' 'DB_USERNAME=poisoned' 'DB_PASSWORD=not-a-secret' 'DB_DIALECT=org.hibernate.dialect.PostgreSQLDialect' 'FLYWAY_ENABLED=true' 'richcomes.test.dotenv-marker=must-not-load' > .env
+          env -i HOME="$HOME" USER="runner" PATH="$PATH" JAVA_HOME="$JAVA_HOME" \
+            DB_URL=jdbc:postgresql://127.0.0.1:1/forbidden DB_USERNAME=poisoned DB_PASSWORD=not-a-secret \
+            DB_DIALECT=org.hibernate.dialect.PostgreSQLDialect FLYWAY_ENABLED=true \
+            ./mvnw -B -Dtest='*,!GarageApplicationTests,!ServiceCategoryControllerTest,!CashierPermissionPostgresIT' clean test
+
   isolated-security:
     name: Java 21 regression / PostgreSQL / Flyway
     runs-on: ubuntu-latest

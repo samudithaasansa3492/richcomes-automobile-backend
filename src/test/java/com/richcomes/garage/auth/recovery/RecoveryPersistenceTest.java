@@ -206,7 +206,7 @@ class RecoveryPersistenceTest {
             factory.setPackagesToScan("com.richcomes.garage.auth.entity", "com.richcomes.garage.employee.entity", "com.richcomes.garage.customer.entity",
                     "com.richcomes.garage.auth.recovery");
             factory.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
-            factory.setJpaPropertyMap(Map.of("hibernate.hbm2ddl.auto", "create-drop", "hibernate.show_sql", "false"));
+            factory.setJpaPropertyMap(Map.of("hibernate.hbm2ddl.auto", "create-drop", "hibernate.default_schema", "garage", "hibernate.hbm2ddl.halt_on_error", "true", "hibernate.show_sql", "false"));
             return factory;
         }
         @Bean PlatformTransactionManager transactionManager(EntityManagerFactory factory) { return new JpaTransactionManager(factory); }
