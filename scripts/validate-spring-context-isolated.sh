@@ -70,6 +70,9 @@ echo "PASS: disposable PostgreSQL and Supabase NOLOGIN role fixtures"
 # Explicitly pass a new database URL and throwaway JWT signing keys.
 # A clean environment prevents other host settings from redirecting the test.
 URL="jdbc:postgresql://127.0.0.1:${port}/richcomes_context?sslmode=disable"
+# Explicit CI-only migration runs BEFORE the Spring context, with exact
+# V23 security guard and V29 schema assertions. Never migrate external DBs.
+bash scripts/prepare-isolated-context-schema.sh "$NAME" "$port" "$DB_PASSWORD" "$ROOT"
 echo "=== Full-context security tests plus opt-in PostgreSQL permission/audit transaction IT ==="
 
 if env -i \
@@ -81,7 +84,7 @@ if env -i \
   RICHCOMES_LOCAL_PG_TESTS=YES \
   ./mvnw -B \
     -Dtest=GarageApplicationTests,ServiceCategoryControllerTest,CashierPermissionPostgresIT \
-    -Dspring.flyway.enabled=true \
+    -Dspring.flyway.enabled=false \
     -Dspring.datasource.url="$URL" \
     -Dspring.datasource.username=postgres \
     -Dspring.datasource.password="$DB_PASSWORD" \
