@@ -1,6 +1,7 @@
 package com.richcomes.garage.service.controller;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -18,7 +19,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@ActiveProfiles("test")
+@ActiveProfiles("isolated-pg")
+@EnabledIfEnvironmentVariable(named = "RICHCOMES_LOCAL_PG_TESTS", matches = "YES")
 class ServiceCategoryControllerTest {
     @Autowired
     private MockMvc mockMvc;
