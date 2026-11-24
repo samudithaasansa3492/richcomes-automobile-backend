@@ -238,6 +238,11 @@ public class GRNService {
                 throw badRequest("Stock quantity exceeds supported range");
             }
 
+            // Existing transaction before/after columns represent GLOBAL item quantities.
+            // Track a running global total so each store allocation has its own accurate
+            // movement record without double-counting the GRN receipt.
+            BigDecimal runningGlobal = before;
+
             // The item row lock serializes GRN receipts for this product, including
             // first-time balance inserts where a store balance row cannot yet be locked.
             for (GRNItemAllocation allocation : allocations.stream()
@@ -269,22 +274,32 @@ public class GRNService {
                 }
                 balance.setQuantity(updated);
                 storeStockBalanceRepository.saveAndFlush(balance);
+
+                // One STOCK_IN row per actual store allocation. The GRN document
+                // remains the reference; store identity is a separate foreign key.
+                BigDecimal nextGlobal = runningGlobal.add(allocation.getAllocatedQuantity());
+                StockTransaction transaction = new StockTransaction();
+                transaction.setStockItem(stockItem);
+                transaction.setStoreLocation(store);
+                transaction.setTransactionType(StockTransactionType.STOCK_IN);
+                transaction.setQuantity(allocation.getAllocatedQuantity());
+                transaction.setQuantityBefore(runningGlobal);
+                transaction.setQuantityAfter(nextGlobal);
+                transaction.setReferenceType("GRN");
+                transaction.setReferenceId(grn.getId());
+                transaction.setReason("Stock received via " + grn.getGrnNumber());
+                transactionRepository.save(transaction);
+                runningGlobal = nextGlobal;
+            }
+
+            // All recorded store receipts must add up to the item-level receipt.
+            if (runningGlobal.compareTo(after) != 0) {
+                throw conflict("GRN store allocations do not match global stock total");
             }
 
             // Maintain the legacy aggregate while other modules still read it.
             stockItem.setCurrentQuantity(after);
             stockItemRepository.save(stockItem);
-
-            StockTransaction transaction = new StockTransaction();
-            transaction.setStockItem(stockItem);
-            transaction.setTransactionType(StockTransactionType.STOCK_IN);
-            transaction.setQuantity(received);
-            transaction.setQuantityBefore(before);
-            transaction.setQuantityAfter(after);
-            transaction.setReferenceType("GRN");
-            transaction.setReferenceId(grn.getId());
-            transaction.setReason("Stock received via " + grn.getGrnNumber());
-            transactionRepository.save(transaction);
         }
 
         grn.setStatus(GRNStatus.CONFIRMED);

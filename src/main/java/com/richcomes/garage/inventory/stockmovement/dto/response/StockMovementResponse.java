@@ -10,6 +10,9 @@ public class StockMovementResponse {
 
     private Long id;
     private Long stockItemId;
+    private Long storeLocationId;
+    private String storeCode;
+    private String storeName;
     private String itemCode;
     private String itemName;
 
@@ -43,6 +46,30 @@ public class StockMovementResponse {
 
     public void setStockItemId(Long stockItemId) {
         this.stockItemId = stockItemId;
+    }
+
+    public Long getStoreLocationId() {
+        return storeLocationId;
+    }
+
+    public void setStoreLocationId(Long storeLocationId) {
+        this.storeLocationId = storeLocationId;
+    }
+
+    public String getStoreCode() {
+        return storeCode;
+    }
+
+    public void setStoreCode(String storeCode) {
+        this.storeCode = storeCode;
+    }
+
+    public String getStoreName() {
+        return storeName;
+    }
+
+    public void setStoreName(String storeName) {
+        this.storeName = storeName;
     }
 
     public String getItemCode() {

@@ -73,41 +73,14 @@ case "$ACTION" in
     response="$(curl -fsS --max-time 8 "http://127.0.0.1:$RICHCOMES_TEAM_PORT/actuator/health/readiness" 2>/dev/null)" ||
       { echo "FAIL: backend readiness not UP" >&2; exit 1; }
     [[ "$response" == *'"status":"UP"'* ]] || { echo "FAIL: unexpected readiness response" >&2; exit 1; }
-    # Exact source version is enforced by check-flyway-source-versions.py.
-    # Validate BOTH row count and highest version; do not accept partial upgrades.
-    history="$(docker compose --project-name "$PROJECT" -f "$COMPOSE" exec -T database \
+    count="$(docker compose --project-name "$PROJECT" -f "$COMPOSE" exec -T database \
       psql -U postgres -d richcomes_team -Atc \
-      "SELECT COUNT(*)::text || ':' || COALESCE(MAX(version::int), 0)::text
-         FROM public.flyway_schema_history WHERE success AND version ~ '^[0-9]+
+      "SELECT COUNT(*)::text || ':' || MAX(version::int)::text FROM public.flyway_schema_history WHERE success AND version ~ '^[0-9]+$'" 2>/dev/null)"
+    [[ "$count" == 29:29 ]] || { echo "FAIL: expected Flyway history 29:29, got $count" >&2; exit 1; }
     # Neither database ports nor customer data are exposed to the host.
     [[ -z "$(docker port "$(docker compose --project-name "$PROJECT" -f "$COMPOSE" ps -q database)" 5432/tcp 2>/dev/null)" ]] ||
       { echo "FAIL: local PostgreSQL unexpectedly published" >&2; exit 1; }
     echo "PASS: disposable team backend readiness UP; migrations V1-V29; DB port private"
-    ;;
-  logs)
-    container_id="$(docker ps -aq --filter "name=^/${PROJECT}-backend-1$" | head -n 1)"
-    [[ -n "$container_id" ]] || { echo "STOP: team backend container not found" >&2; exit 2; }
-    docker logs --tail 100 "$container_id" 2>&1 |
-      sed -E 's/[A-Za-z0-9_-]{43}/[redacted-token]/g' |
-      grep -E 'Exception|ERROR|WARN|started|Started|Flyway|permission|denied|certificate|Could not' |
-      tail -n 45 || true
-    ;;
-  status)
-    [[ -r "$RICHCOMES_TEAM_STATE/password" ]] || { echo "STOP: no local fixture" >&2; exit 2; }
-    export RICHCOMES_TEAM_PASSWORD="$(cat "$RICHCOMES_TEAM_STATE/password")"
-    docker compose --project-name "$PROJECT" -f "$COMPOSE" ps
-    ;;
-  *)
-    echo "Usage: bash scripts/team-dev.sh [up|verify|status|logs|down]" >&2
-    exit 2
-    ;;
-esac
-" 2>/dev/null)"
-    [[ "$history" == 29:29 ]] || { echo "FAIL: expected disposable V29 Flyway history, got $history" >&2; exit 1; }
-    # Neither database ports nor customer data are exposed to the host.
-    [[ -z "$(docker port "$(docker compose --project-name "$PROJECT" -f "$COMPOSE" ps -q database)" 5432/tcp 2>/dev/null)" ]] ||
-      { echo "FAIL: local PostgreSQL unexpectedly published" >&2; exit 1; }
-    echo "PASS: disposable team backend readiness UP; migrations V1-V26; DB port private"
     ;;
   logs)
     container_id="$(docker ps -aq --filter "name=^/${PROJECT}-backend-1$" | head -n 1)"

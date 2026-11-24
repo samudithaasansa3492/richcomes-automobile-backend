@@ -58,5 +58,5 @@ if errors:
         print(f"  - {err}")
     sys.exit(1)
 
-print("PASS: unique migration versions V1–V29; applied source names V24–V28 preserved")
+print("PASS: unique migration versions V1–V29; source names V24–V29 preserved")
 print("NOTE: this is NOT PostgreSQL migration, checksum, SQL-content, or Flyway validation.")
