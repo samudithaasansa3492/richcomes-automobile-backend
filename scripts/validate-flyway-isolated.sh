@@ -706,6 +706,41 @@ verify_inventory_v28() {
 }
 
 # --------------------------------------------------
+verify_appointment_v29_if_present() {
+    local db="$1" ok
+    if [[ "$LATEST" -lt 29 ]]; then
+        return 0
+    fi
+    ok="$(docker exec "$CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 \
+        -U postgres -d "richcomes_${db}" -c "
+        SELECT
+          (SELECT count(*) FROM information_schema.columns
+           WHERE table_schema='garage' AND table_name='appointments'
+             AND column_name IN ('cancellation_reason','cancelled_at',
+                                 'cancelled_by_account_id','cancelled_by_type')) = 4
+          AND EXISTS (
+             SELECT 1 FROM pg_constraint
+             WHERE conrelid='garage.appointments'::regclass
+               AND conname='chk_appointment_cancellation'
+               AND pg_get_constraintdef(oid) LIKE '%CANCELLED%'
+          )
+          AND EXISTS (
+             SELECT 1 FROM pg_constraint
+             WHERE conrelid='garage.appointments'::regclass
+               AND conname='fk_appointments_cancelled_by_account'
+               AND confrelid='garage.user_accounts'::regclass
+               AND contype='f'
+          )
+          AND (SELECT count(*) FROM information_schema.columns
+               WHERE table_schema='garage' AND table_name='customers'
+                 AND column_name IN ('sms_consent','mobile_verified',
+                                     'email_consent','email_verified')) = 4
+        ")"
+    [[ "$ok" == t ]] ||
+      { echo "FAIL: ${db} V27 customer consent or V29 cancellation constraints missing"; exit 1; }
+    echo "PASS: ${db} Member 02 V29 appointment cancellation schema and V27 consent"
+}
+
 # 16. V28 complete backup/restore verification
 # --------------------------------------------------
 
@@ -840,6 +875,7 @@ verify_business_delegation fresh
 verify_browser_denial fresh
 verify_inventory_v26 fresh
 verify_inventory_v28 fresh
+verify_appointment_v29_if_present fresh
 verify_latest_backup_roundtrip
 
 # --------------------------------------------------
@@ -914,6 +950,7 @@ verify_business_delegation upgrade
 verify_browser_denial upgrade
 verify_inventory_v26 upgrade
 verify_inventory_v28 upgrade
+verify_appointment_v29_if_present upgrade
 
 # --------------------------------------------------
 # 19. Confirm legacy OWNER preservation

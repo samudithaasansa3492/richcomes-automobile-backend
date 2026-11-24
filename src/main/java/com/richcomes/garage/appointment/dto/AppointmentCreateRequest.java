@@ -4,11 +4,18 @@ package com.richcomes.garage.appointment.dto;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import java.time.LocalDate;
 
 public class AppointmentCreateRequest {
+
+    @Positive(message = "Customer ID must be positive")
+    private Long customerId;
+
+    @Positive(message = "Vehicle ID must be positive")
+    private Long vehicleId;
 
     @NotBlank(message = "Customer name is required")
     @Size(
@@ -37,6 +44,22 @@ public class AppointmentCreateRequest {
     private String serviceDescription;
 
     public AppointmentCreateRequest() {
+    }
+
+    public Long getCustomerId() {
+        return customerId;
+    }
+
+    public void setCustomerId(Long customerId) {
+        this.customerId = customerId;
+    }
+
+    public Long getVehicleId() {
+        return vehicleId;
+    }
+
+    public void setVehicleId(Long vehicleId) {
+        this.vehicleId = vehicleId;
     }
 
     public String getCustomerName() {

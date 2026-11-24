@@ -82,6 +82,20 @@ public class Appointment {
     @Column(name = "not_completed_reason")
     private String notCompletedReason;
 
+    @Size(max = 1000)
+    @Column(name = "cancellation_reason", length = 1000)
+    private String cancellationReason;
+
+    @Column(name = "cancelled_at")
+    private LocalDateTime cancelledAt;
+
+    @Column(name = "cancelled_by_account_id")
+    private Long cancelledByAccountId;
+
+    @Size(max = 20)
+    @Column(name = "cancelled_by_type", length = 20)
+    private String cancelledByType;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
@@ -229,6 +243,38 @@ public class Appointment {
 
     public void setNotCompletedReason(String notCompletedReason) {
         this.notCompletedReason = notCompletedReason;
+    }
+
+    public String getCancellationReason() {
+        return cancellationReason;
+    }
+
+    public void setCancellationReason(String cancellationReason) {
+        this.cancellationReason = cancellationReason;
+    }
+
+    public LocalDateTime getCancelledAt() {
+        return cancelledAt;
+    }
+
+    public void setCancelledAt(LocalDateTime cancelledAt) {
+        this.cancelledAt = cancelledAt;
+    }
+
+    public Long getCancelledByAccountId() {
+        return cancelledByAccountId;
+    }
+
+    public void setCancelledByAccountId(Long cancelledByAccountId) {
+        this.cancelledByAccountId = cancelledByAccountId;
+    }
+
+    public String getCancelledByType() {
+        return cancelledByType;
+    }
+
+    public void setCancelledByType(String cancelledByType) {
+        this.cancelledByType = cancelledByType;
     }
 
     public LocalDateTime getCreatedAt() {
