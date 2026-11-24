@@ -76,11 +76,16 @@ case "$ACTION" in
     count="$(docker compose --project-name "$PROJECT" -f "$COMPOSE" exec -T database \
       psql -U postgres -d richcomes_team -Atc \
       "SELECT COUNT(*)::text || ':' || MAX(version::int)::text FROM public.flyway_schema_history WHERE success AND version ~ '^[0-9]+$'" 2>/dev/null)"
-    [[ "$count" == 28:28 ]] || { echo "FAIL: expected Flyway history 28:28, got $count" >&2; exit 1; }
+    expected="$(python3 "$ROOT/scripts/check-flyway-source-versions.py" --latest)" || {
+      echo "FAIL: invalid migration source; cannot verify local database" >&2; exit 1;
+    }
+    [[ "$count" == "$expected:$expected" ]] || {
+      echo "FAIL: expected disposable Flyway history $expected:$expected, got $count" >&2; exit 1;
+    }
     # Neither database ports nor customer data are exposed to the host.
     [[ -z "$(docker port "$(docker compose --project-name "$PROJECT" -f "$COMPOSE" ps -q database)" 5432/tcp 2>/dev/null)" ]] ||
       { echo "FAIL: local PostgreSQL unexpectedly published" >&2; exit 1; }
-    echo "PASS: disposable team backend readiness UP; migrations V1-V28; DB port private"
+    echo "PASS: disposable team backend readiness UP; migrations V1-V${expected}; DB port private"
     ;;
   logs)
     container_id="$(docker ps -aq --filter "name=^/${PROJECT}-backend-1$" | head -n 1)"

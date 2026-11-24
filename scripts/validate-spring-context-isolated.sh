@@ -199,6 +199,16 @@ echo "PASS: disposable PostgreSQL and Supabase NOLOGIN role fixtures"
 
 URL="jdbc:postgresql://127.0.0.1:${port}/richcomes_context?sslmode=disable"
 
+# On Linux CI, run Flyway to the source-derived version on the disposable
+# localhost PostgreSQL BEFORE ApplicationRunner. The production compatibility
+# guard stays active. Windows Git Bash retains the existing Flyway startup
+# behavior until the pre-migration helper is Windows-validated.
+SPRING_FLYWAY_FLAG=true
+if [[ "${OSTYPE:-}" != msys* && "${OSTYPE:-}" != cygwin* ]]; then
+    bash scripts/prepare-isolated-context-schema.sh "$NAME" "$port" "$DB_PASSWORD" "$ROOT"
+    SPRING_FLYWAY_FLAG=false
+fi
+
 # --------------------------------------------------
 # 9. Schema diagnostics (read-only)
 # --------------------------------------------------
@@ -297,7 +307,7 @@ if env -i \
     ./mvnw -B \
     -Djava.io.tmpdir="$TEST_TMP_NATIVE" \
     -Dtest=GarageApplicationTests,ServiceCategoryControllerTest,CashierPermissionPostgresIT \
-    -Dspring.flyway.enabled=true \
+    -Dspring.flyway.enabled="$SPRING_FLYWAY_FLAG" \
     -Dspring.jpa.hibernate.ddl-auto=none \
     -Dspring.datasource.url="$URL" \
     -Dspring.datasource.username=postgres \

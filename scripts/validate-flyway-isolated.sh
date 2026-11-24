@@ -51,6 +51,10 @@ unset JAVA_TOOL_OPTIONS JDK_JAVA_OPTIONS MAVEN_OPTS
 if command -v python3 >/dev/null 2>&1 &&
     python3 -c 'import sys' >/dev/null 2>&1; then
     python3 scripts/check-flyway-source-versions.py
+LATEST="$(python3 scripts/check-flyway-source-versions.py --latest)"
+[[ "$LATEST" =~ ^[0-9]+$ && "$LATEST" -ge 28 ]] ||
+  { echo "FAIL: dynamic validated latest version is invalid" >&2; exit 1; }
+echo "=== Testing disposable Flyway V1-V$LATEST ==="
 elif command -v py >/dev/null 2>&1; then
     py -3 scripts/check-flyway-source-versions.py
 else
@@ -286,12 +290,12 @@ verify_count() {
           AND version ~ '^[0-9]+$';
         ")"
 
-    test "$result" = "28:1:28" || {
-        echo "FAIL: ${db} Flyway history expected 28:1:28, got $result"
+    test "$result" = "${LATEST}:1:${LATEST}" || {
+        echo "FAIL: ${db} Flyway history expected ${LATEST}:1:${LATEST}, got $result"
         exit 1
     }
 
-    echo "PASS: ${db} contains V1-V28 successful migrations"
+    echo "PASS: ${db} contains V1-V${LATEST} successful migrations"
 }
 
 # --------------------------------------------------
@@ -705,40 +709,40 @@ verify_inventory_v28() {
 # 16. V28 complete backup/restore verification
 # --------------------------------------------------
 
-verify_v28_backup_roundtrip() {
+verify_latest_backup_roundtrip() {
 
-    echo '=== Exercise complete V28 backup/restore in disposable PostgreSQL ==='
+    echo '=== Exercise complete latest backup/restore in disposable PostgreSQL ==='
 
     docker exec "$CONTAINER" \
         pg_dump -U postgres -d richcomes_fresh \
         --format=custom --no-owner --no-acl \
         --schema=garage \
-        -f /tmp/garage-v28-ci.dump
+        -f /tmp/garage-latest-ci.dump
 
     docker exec "$CONTAINER" \
         pg_dump -U postgres -d richcomes_fresh \
         --format=custom --no-owner --no-acl \
         --table=public.flyway_schema_history \
-        -f /tmp/history-v28-ci.dump
+        -f /tmp/history-latest-ci.dump
 
     docker exec "$CONTAINER" \
-        pg_restore --list /tmp/garage-v28-ci.dump >/dev/null
+        pg_restore --list /tmp/garage-latest-ci.dump >/dev/null
 
     docker exec "$CONTAINER" \
-        pg_restore --list /tmp/history-v28-ci.dump >/dev/null
+        pg_restore --list /tmp/history-latest-ci.dump >/dev/null
 
     docker exec "$CONTAINER" \
-        createdb -U postgres richcomes_v28_restore
+        createdb -U postgres richcomes_latest_restore
 
     docker exec "$CONTAINER" \
-        pg_restore -U postgres -d richcomes_v28_restore \
+        pg_restore -U postgres -d richcomes_latest_restore \
         --exit-on-error --no-owner --no-acl \
-        /tmp/garage-v28-ci.dump
+        /tmp/garage-latest-ci.dump
 
     docker exec "$CONTAINER" \
-        pg_restore -U postgres -d richcomes_v28_restore \
+        pg_restore -U postgres -d richcomes_latest_restore \
         --exit-on-error --no-owner --no-acl \
-        /tmp/history-v28-ci.dump
+        /tmp/history-latest-ci.dump
 
     # Keep existing 33-table V26 fixture as regression coverage.
     docker cp scripts/garage-v26-exact-counts.sql \
@@ -752,7 +756,7 @@ verify_v28_backup_roundtrip() {
         -f /tmp/garage-v26-exact-counts.sql)"
 
     after="$(docker exec "$CONTAINER" \
-        psql -U postgres -d richcomes_v28_restore \
+        psql -U postgres -d richcomes_latest_restore \
         -qAt -v ON_ERROR_STOP=1 \
         -f /tmp/garage-v26-exact-counts.sql)"
 
@@ -762,12 +766,49 @@ verify_v28_backup_roundtrip() {
     }
 
     test "$before" = "$after" || {
-        echo 'FAIL: V28 recovered table counts differ'
+        echo 'FAIL: Latest recovered table counts differ'
         exit 1
     }
 
+    # The frozen V26 fixture checks the original 33 tables. Also compare ALL
+    # present garage tables so future source migrations adding new tables cannot
+    # silently fall outside the disposable restore verification.
+    local source_tables recovered_tables table source_rows recovered_rows checked
+    source_tables="$(docker exec "$CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 \
+        -U postgres -d richcomes_fresh -c \
+        "SELECT tablename FROM pg_tables WHERE schemaname='garage' ORDER BY tablename")"
+    recovered_tables="$(docker exec "$CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 \
+        -U postgres -d richcomes_latest_restore -c \
+        "SELECT tablename FROM pg_tables WHERE schemaname='garage' ORDER BY tablename")"
+    [[ -n "$source_tables" && "$source_tables" == "$recovered_tables" ]] || {
+        echo 'FAIL: source and recovered garage table sets differ'
+        exit 1
+    }
+    checked=0
+    while IFS= read -r table; do
+        [[ "$table" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || {
+            echo 'FAIL: unexpected garage table identifier in disposable restore'
+            exit 1
+        }
+        source_rows="$(docker exec "$CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 \
+            -U postgres -d richcomes_fresh -c "SELECT COUNT(*) FROM garage.$table")"
+        recovered_rows="$(docker exec "$CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 \
+            -U postgres -d richcomes_latest_restore -c "SELECT COUNT(*) FROM garage.$table")"
+        [[ "$source_rows" =~ ^[0-9]+$ && "$source_rows" == "$recovered_rows" ]] || {
+            echo "FAIL: recovered garage.$table has a different row count"
+            exit 1
+        }
+        checked=$((checked + 1))
+    done <<< "$source_tables"
+    [[ "$checked" -ge 33 ]] || {
+        echo "FAIL: expected at least 33 garage tables, got $checked"
+        exit 1
+    }
+    echo "PASS: all $checked current garage tables and row counts match isolated restore"
+
+
     versions="$(docker exec "$CONTAINER" \
-        psql -U postgres -d richcomes_v28_restore \
+        psql -U postgres -d richcomes_latest_restore \
         -qAt -v ON_ERROR_STOP=1 -c "
         SELECT COUNT(*)::text || ':' ||
                MIN(version::int)::text || ':' ||
@@ -777,19 +818,19 @@ verify_v28_backup_roundtrip() {
           AND version ~ '^[0-9]+$'
         ")"
 
-    test "$versions" = "28:1:28" || {
-        echo "FAIL: recovered V28 history expected 28:1:28, got $versions"
+    test "$versions" = "${LATEST}:1:${LATEST}" || {
+        echo "FAIL: recovered latest history expected ${LATEST}:1:${LATEST}, got $versions"
         exit 1
     }
 
-    echo 'PASS: V28 backup/restore, 33 tracked table counts and 28 migrations'
+    echo "PASS: latest V$LATEST backup/restore, 33 tracked table counts and $LATEST migrations"
 }
 
 # --------------------------------------------------
 # 17. Fresh migration test
 # --------------------------------------------------
 
-echo '=== Fresh install V1-V28 ==='
+echo "=== Fresh install V1-V$LATEST ==="
 
 flyway fresh latest
 
@@ -799,13 +840,13 @@ verify_business_delegation fresh
 verify_browser_denial fresh
 verify_inventory_v26 fresh
 verify_inventory_v28 fresh
-verify_v28_backup_roundtrip
+verify_latest_backup_roundtrip
 
 # --------------------------------------------------
 # 18. Upgrade V1-V14 to V28
 # --------------------------------------------------
 
-echo '=== Simulate upgrade V1-V14 to V28 ==='
+echo "=== Simulate upgrade V1-V14 to V$LATEST ==="
 
 flyway upgrade 14
 
@@ -901,5 +942,5 @@ test "$owner_count" = 1 || {
 }
 
 echo 'PASS: synthetic legacy OWNER preserved'
-echo 'PASS: disposable Flyway V1-V28 fresh and upgrade verification completed'
+echo "PASS: disposable Flyway V1-V$LATEST fresh and upgrade verification completed"
 echo 'PASS: no shared Supabase database touched'
