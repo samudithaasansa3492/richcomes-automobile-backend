@@ -33,7 +33,7 @@ build/
 .vscode/
 .env.idea/
 
-client.private.env.json
+http-client.private.env.json
 
 # Local configuration and sensitive runtime credentials
 .env
