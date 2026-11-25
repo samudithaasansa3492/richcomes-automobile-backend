@@ -50,6 +50,24 @@ class IdentityPersistenceTest {
     @Autowired private PermissionRepository permissions;
     @PersistenceContext private EntityManager entityManager;
 
+    @Autowired private DataSource fixtureDataSource;
+
+    @Test
+    void customerForeignKeyExistsInEmbeddedGarageSchema() throws Exception {
+        boolean found = false;
+        try (var connection = fixtureDataSource.getConnection();
+             var keys = connection.getMetaData().getImportedKeys(null, "GARAGE", "USER_ACCOUNTS")) {
+            while (keys.next()) {
+                if ("CUSTOMERS".equalsIgnoreCase(keys.getString("PKTABLE_NAME"))
+                        && "GARAGE".equalsIgnoreCase(keys.getString("PKTABLE_SCHEM"))
+                        && "CUSTOMER_ID".equalsIgnoreCase(keys.getString("FKCOLUMN_NAME"))) {
+                    found = true;
+                }
+            }
+        }
+        assertTrue(found, "H2 must create the customer foreign key, not merely log a DDL warning");
+    }
+
     @Test
     void loadsEmployeeRolesAndPermissionsForNormalizedUsername() {
         Permission read = permissions.saveAndFlush(new Permission("employee:read", "View employees"));
@@ -257,7 +275,7 @@ class IdentityPersistenceTest {
             factory.setDataSource(dataSource);
             factory.setPackagesToScan("com.richcomes.garage.auth.entity", "com.richcomes.garage.employee.entity", "com.richcomes.garage.customer.entity");
             factory.setJpaVendorAdapter(new HibernateJpaVendorAdapter());
-            factory.setJpaPropertyMap(Map.of("hibernate.hbm2ddl.auto", "create-drop"));
+            factory.setJpaPropertyMap(Map.of("hibernate.hbm2ddl.auto", "create-drop", "hibernate.default_schema", "garage", "hibernate.hbm2ddl.halt_on_error", "true"));
             return factory;
         }
 
