@@ -38,3 +38,51 @@ Authorization: Basic {{billingUsername}} {{billingPassword}}
 ### Get part lines for the job
 GET http://localhost:8080/api/service-job-parts/job/{{testJobId}}
 Authorization: Basic {{billingUsername}} {{billingPassword}}
+
+### Login
+POST http://localhost:8080/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{billingUsername}}",
+  "password": "{{billingPassword}}"
+}
+
+> {%
+    client.test("Login succeeds", function () {
+        client.assert(response.status === 200, "Login failed");
+        client.assert(
+            Boolean(response.body.accessToken),
+            "Access token is missing"
+        );
+    });
+
+    if (response.status === 200 && response.body.accessToken) {
+        client.global.set("billingToken", response.body.accessToken);
+    }
+%}
+
+### Load job details
+GET http://localhost:8080/api/service-jobs/{{testJobId}}
+Authorization: Bearer {{billingToken}}
+
+### Load job labour
+GET http://localhost:8080/api/service-job-items/job/{{testJobId}}
+Authorization: Bearer {{billingToken}}
+
+### Load job parts
+GET http://localhost:8080/api/service-job-parts/job/{{testJobId}}
+Authorization: Bearer {{billingToken}}
+
+### Retrieve invoice
+GET http://localhost:8080/api/v1/billing/invoices/1
+Authorization: Bearer {{billingToken}}
+
+### List invoices
+GET http://localhost:8080/api/v1/billing/invoices?page=0&size=20
+
+### Filter by customer and status
+GET http://localhost:8080/api/v1/billing/invoices?customerId=2&status=DRAFT
+
+### Filter by job
+GET http://localhost:8080/api/v1/billing/invoices?serviceJobId=10
