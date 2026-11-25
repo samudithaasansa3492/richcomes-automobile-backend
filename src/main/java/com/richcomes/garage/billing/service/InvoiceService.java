@@ -7,14 +7,25 @@ import com.richcomes.garage.billing.entity.Invoice;
 import com.richcomes.garage.billing.entity.InvoiceItem;
 import com.richcomes.garage.billing.repository.InvoiceItemRepository;
 import com.richcomes.garage.billing.repository.InvoiceRepository;
+import com.richcomes.garage.billing.enums.InvoiceStatus;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
+
+import java.util.ArrayList;
+import jakarta.persistence.criteria.Predicate;
+
 
 @Service
 public class InvoiceService {
@@ -47,11 +58,33 @@ public class InvoiceService {
             );
         }
 
-        JobBillingDetails job = jobBillingAdapter.getBillingDetails(serviceJobId);
-        BigDecimal subtotal = calculationService.calculateSubtotal(job.getItems());
+        Integer jobId = Math.toIntExact(serviceJobId);
+
+        var existingInvoice = invoiceRepository
+                .findFirstByServiceJobIdAndStatusNotOrderByIdDesc(
+                        jobId,
+                        InvoiceStatus.CANCELLED
+                );
+
+        if (existingInvoice.isPresent()) {
+            Invoice invoice = existingInvoice.get();
+
+            List<InvoiceItem> items =
+                    invoiceItemRepository.findByInvoice_IdOrderByIdAsc(
+                            invoice.getId()
+                    );
+
+            return toResponse(invoice, items);
+        }
+
+        JobBillingDetails job =
+                jobBillingAdapter.getBillingDetails(serviceJobId);
+
+        BigDecimal subtotal =
+                calculationService.calculateSubtotal(job.getItems());
 
         Invoice invoice = invoiceRepository.save(new Invoice(
-                Math.toIntExact(serviceJobId),
+                jobId,
                 job.getCustomerId(),
                 job.getVehicleId(),
                 LocalDateTime.now(),
@@ -67,12 +100,15 @@ public class InvoiceService {
                         item.getQuantity(),
                         item.getUnitPrice(),
                         calculationService.calculateLineAmount(
-                                item.getQuantity(), item.getUnitPrice()
+                                item.getQuantity(),
+                                item.getUnitPrice()
                         )
                 ))
                 .toList();
 
-        List<InvoiceItem> savedItems = invoiceItemRepository.saveAll(items);
+        List<InvoiceItem> savedItems =
+                invoiceItemRepository.saveAll(items);
+
         return toResponse(invoice, savedItems);
     }
 
@@ -87,6 +123,73 @@ public class InvoiceService {
                 invoiceItemRepository.findByInvoice_IdOrderByIdAsc(invoiceId);
 
         return toResponse(invoice, items);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<InvoiceResponse> searchInvoices(
+            Long customerId,
+            Long vehicleId,
+            Long serviceJobId,
+            InvoiceStatus status,
+            int page,
+            int size
+    ) {
+        if (page < 0 || size < 1 || size > 100) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Page must be zero or greater and size must be between 1 and 100"
+            );
+        }
+
+        if ((customerId != null && customerId <= 0)
+                || (vehicleId != null && vehicleId <= 0)
+                || (serviceJobId != null
+                && (serviceJobId <= 0
+                || serviceJobId > Integer.MAX_VALUE))) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Filter IDs must be positive and service job ID must fit a 32-bit integer"
+            );
+        }
+
+        Specification<Invoice> specification = (root, query, builder) -> {
+            List<Predicate> filters = new ArrayList<>();
+
+            if (customerId != null) {
+                filters.add(builder.equal(root.get("customerId"), customerId));
+            }
+
+            if (vehicleId != null) {
+                filters.add(builder.equal(root.get("vehicleId"), vehicleId));
+            }
+
+            if (serviceJobId != null) {
+                filters.add(builder.equal(
+                        root.get("serviceJobId"),
+                        Math.toIntExact(serviceJobId)
+                ));
+            }
+
+            if (status != null) {
+                filters.add(builder.equal(root.get("status"), status));
+            }
+
+            return builder.and(filters.toArray(Predicate[]::new));
+        };
+
+        PageRequest pageRequest = PageRequest.of(
+                page,
+                size,
+                Sort.by(Sort.Direction.DESC, "id")
+        );
+
+        return invoiceRepository.findAll(specification, pageRequest)
+                .map(invoice -> toResponse(
+                        invoice,
+                        invoiceItemRepository.findByInvoice_IdOrderByIdAsc(
+                                invoice.getId()
+                        )
+                ));
     }
 
     private InvoiceResponse toResponse(Invoice invoice, List<InvoiceItem> items) {
