@@ -154,8 +154,11 @@ docker run -d --rm --name "$container" --network none \
   postgres:17.12 >/dev/null || die "Isolated PostgreSQL failed"
 ready=0
 for _ in $(seq 1 120); do
-  if docker exec "$container" psql -X -qAt -U postgres -d postgres \
-      -c 'SELECT 1' 2>/dev/null | grep -qx 1; then ready=1; break; fi
+  # The initdb entrypoint's temporary server accepts Unix sockets but not TCP.
+  # Wait for the final server using authenticated container-local TCP only.
+  if docker exec "$container" sh -c \
+      'PGPASSWORD="$POSTGRES_PASSWORD" exec psql -X -qAt -w -h 127.0.0.1 -p 5432 -U postgres -d postgres -c "SELECT 1"' \
+      2>/dev/null | grep -qx 1; then ready=1; break; fi
   sleep 0.5
 done
 [[ "$ready" == 1 ]] || die "Isolated PostgreSQL not ready"
