@@ -86,7 +86,7 @@ def main() -> int:
         "--history-csv", type=str, default="-",
         help="CSV file from read-only catalog COPY query, or '-' to read stdin",
     )
-    parser.add_argument('--expected-version', type=int, choices=(14, 26, 28), default=14,
+    parser.add_argument('--expected-version', type=int, choices=(14, 26, 28, 31), default=14,
                         help='Exact frozen source migration upper bound; default V14 for historical archives')
     args = parser.parse_args()
     try:
