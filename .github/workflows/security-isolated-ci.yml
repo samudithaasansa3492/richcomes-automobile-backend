@@ -11,6 +11,7 @@ on:
       - ".mvn/**"
       - "mvnw"
       - "scripts/**"
+      - "ops/security/**"
       - ".github/workflows/security-isolated-ci.yml"
   workflow_dispatch:
 
@@ -102,7 +103,7 @@ jobs:
           bash -n scripts/backup-garage-v31-with-restore-rehearsal.sh
           bash -n scripts/railway-offsite-v31-backup.sh
           bash scripts/test-v31-recovery-guards.sh
-          # Source-driven Flyway version policy; V1-V28 checksums are immutable.
+          # Source-driven Flyway version policy; V1-V31 checksums are immutable.
           python3 scripts/check-flyway-source-versions.py
           python3 scripts/test-flyway-source-policy.py
           python3 scripts/test-pr-flyway-collisions.py

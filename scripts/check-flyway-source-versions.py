@@ -2,7 +2,7 @@
 """Fail-closed source Flyway audit; outputs the latest version with --latest.
 
 This DOES NOT connect to any database, migrate, prove a backup, or authorize deployment.
-Previously applied V1-V28 SQL paths and Flyway CRC32 values are pinned; newer
+Previously applied V1-V31 SQL paths and Flyway CRC32 values are pinned; newer
 versions are dynamically discovered, but MUST be consecutive and uniquely named.
 """
 from __future__ import annotations
@@ -21,9 +21,12 @@ SQL_NAME = re.compile(r"V([1-9][0-9]*)__([A-Za-z0-9_]+)\.sql\Z")
 # These migrations were confirmed successfully applied in shared Supabase;
 # never rewrite, rename, or reorder them. Change only with explicit DBA review
 # and a separately approved recovery plan; automated CI must not weaken this.
-APPLIED_V27_V28 = {
+APPLIED_V27_V31 = {
     27: ("V27__add_customer_consent_verification.sql", 655573779),
     28: ("V28__add_stock_transaction_store_location.sql", -1018756729),
+    29: ("V29__add_appointment_cancellation.sql", 1660705979),
+    30: ("V30__create_payments.sql", -753443985),
+    31: ("V31__harden_appointment_cancellation_constraint.sql", -384791422),
 }
 
 
@@ -48,7 +51,7 @@ def applied_baseline() -> dict[int, tuple[str, int]]:
             baseline[n] = (script, int(checksum))
     if sorted(baseline) != list(range(1, 27)):
         raise ValueError("Expected exactly 26 historical applied migrations")
-    baseline.update(APPLIED_V27_V28)
+    baseline.update(APPLIED_V27_V31)
     return baseline
 
 
@@ -116,7 +119,7 @@ def main() -> int:
         print(latest)
     else:
         print(f"PASS: V1–V{latest} are unique, complete and contiguous")
-        print("PASS: immutable applied V1–V28 filenames and Flyway CRC32 match source")
+        print("PASS: immutable applied V1–V31 filenames and Flyway CRC32 match source")
         print("NOTE: source-only validation, not live Flyway history, backup or release approval")
     return 0
 

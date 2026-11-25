@@ -988,6 +988,13 @@ test "$owner_count" = 1 || {
     exit 1
 }
 
+if [[ "$LATEST" == 31 ]]; then
+    docker exec -i "$CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d richcomes_fresh < ops/security/lock-down-public-flyway-history.sql
+    docker exec -i "$CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d richcomes_fresh < ops/security/configure-v31-runtime-role.sql
+    docker exec -i "$CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d richcomes_fresh < scripts/test-v31-runtime-role.sql
+    echo 'PASS: restricted runtime DML, OWNER row lock, audit/static seed protection and DDL denial'
+fi
+
 echo 'PASS: synthetic legacy OWNER preserved'
 echo "PASS: disposable Flyway V1-V$LATEST fresh and upgrade verification completed"
 echo 'PASS: no shared Supabase database touched'
