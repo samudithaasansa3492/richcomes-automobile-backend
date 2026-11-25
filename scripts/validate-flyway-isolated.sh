@@ -993,6 +993,19 @@ if [[ "$LATEST" == 31 ]]; then
     docker exec -i "$CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d richcomes_fresh < ops/security/configure-v31-runtime-role.sql
     docker exec -i "$CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d richcomes_fresh < scripts/test-v31-runtime-role.sql
     echo 'PASS: restricted runtime DML, OWNER row lock, audit/static seed protection and DDL denial'
+    # A final backup contains policies referencing richcomes_runtime. A schema
+    # dump omits global roles; restoration needs a NOLOGIN role fixture first.
+    docker exec "$CONTAINER" pg_dump -U postgres -d richcomes_fresh --format=custom --no-owner --no-acl --schema=garage -f /tmp/runtime-schema.dump
+    docker exec "$CONTAINER" createdb -U postgres richcomes_runtime_restore
+    docker exec "$CONTAINER" pg_restore -U postgres -d richcomes_runtime_restore --no-owner --no-acl --exit-on-error /tmp/runtime-schema.dump
+    runtime_policies="$(docker exec "$CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d richcomes_runtime_restore -c "SELECT count(*) FROM pg_policies WHERE schemaname='garage' AND 'richcomes_runtime'=ANY(roles)")"
+    source_policies="$(docker exec "$CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d richcomes_fresh -c "SELECT count(*) FROM pg_policies WHERE schemaname='garage' AND 'richcomes_runtime'=ANY(roles)")"
+    [[ "$runtime_policies" =~ ^[0-9]+$ && "$runtime_policies" -gt 0 && "$runtime_policies" == "$source_policies" ]]
+    source_counts="$(docker exec -i "$CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d richcomes_fresh < scripts/garage-v31-exact-counts.sql)"
+    runtime_counts="$(docker exec -i "$CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d richcomes_runtime_restore < scripts/garage-v31-exact-counts.sql)"
+    [[ "$source_counts" =~ ^[0-9]+(:[0-9]+){33}$ && "$source_counts" == "$runtime_counts" ]]
+    echo 'PASS: post-runtime V31 schema dump restored with policy references and all 34 row counts'
+
 fi
 
 echo 'PASS: synthetic legacy OWNER preserved'

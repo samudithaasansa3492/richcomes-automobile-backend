@@ -95,7 +95,7 @@ for _ in $(seq 1 100); do
 done
 [[ "$ready" == 1 ]] || die "Isolated restore server did not become ready"
 docker exec "$container" psql -X -q -v ON_ERROR_STOP=1 -U postgres -d postgres \
-  -c 'CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN;' >/dev/null
+  -c 'CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE ROLE richcomes_runtime NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;' >/dev/null
 docker cp "$scratch/garage.dump" "$container:/tmp/garage.dump"
 docker cp "$scratch/flyway-history.dump" "$container:/tmp/flyway-history.dump"
 docker exec "$container" pg_restore -U postgres -d postgres \

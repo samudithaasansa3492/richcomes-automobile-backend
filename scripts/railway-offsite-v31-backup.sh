@@ -160,7 +160,7 @@ for _ in $(seq 1 120); do
 done
 [[ "$ready" == 1 ]] || die "Isolated PostgreSQL not ready"
 docker exec "$container" psql -X -q -v ON_ERROR_STOP=1 -U postgres -d postgres \
-  -c 'CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN;' >/dev/null ||
+  -c 'CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE ROLE richcomes_runtime NOLOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOBYPASSRLS;' >/dev/null ||
   die "Synthetic roles could not be created"
 docker cp "$tmp/recovered/garage.dump" "$container:/tmp/garage.dump"
 docker cp "$tmp/recovered/flyway-history.dump" "$container:/tmp/history.dump"
