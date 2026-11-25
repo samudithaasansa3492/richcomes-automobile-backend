@@ -98,6 +98,10 @@ jobs:
           bash -n scripts/test-offsite-v28-backup-guards.sh
           bash scripts/test-offsite-v28-backup-guards.sh
           python3 scripts/test-flyway-v28-history-preflight.py
+          bash -n scripts/check-shared-flyway-v31-readonly.sh
+          bash -n scripts/backup-garage-v31-with-restore-rehearsal.sh
+          bash -n scripts/railway-offsite-v31-backup.sh
+          bash scripts/test-v31-recovery-guards.sh
           # Source-driven Flyway version policy; V1-V28 checksums are immutable.
           python3 scripts/check-flyway-source-versions.py
           python3 scripts/test-flyway-source-policy.py

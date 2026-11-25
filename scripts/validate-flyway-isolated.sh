@@ -840,6 +840,16 @@ verify_latest_backup_roundtrip() {
         exit 1
     }
     echo "PASS: all $checked current garage tables and row counts match isolated restore"
+    if [[ "$LATEST" == 31 ]]; then
+        test "$checked" = 34
+        local counts31 restored31
+        counts31="$(docker exec -i "$CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d richcomes_fresh < scripts/garage-v31-exact-counts.sql)"
+        restored31="$(docker exec -i "$CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d richcomes_latest_restore < scripts/garage-v31-exact-counts.sql)"
+        [[ "$counts31" =~ ^[0-9]+(:[0-9]+){33}$ && "$counts31" == "$restored31" ]]
+        docker exec "$CONTAINER" psql -X -qAt -v ON_ERROR_STOP=1 -U postgres -d richcomes_latest_restore -c "COPY (SELECT installed_rank, version, script, checksum, success FROM public.flyway_schema_history ORDER BY installed_rank) TO STDOUT WITH (FORMAT CSV)" |
+          python3 scripts/verify-applied-flyway-history.py --expected-version 31
+        echo "PASS: exact V31 counts and restored migration CRCs"
+    fi
 
 
     versions="$(docker exec "$CONTAINER" \
