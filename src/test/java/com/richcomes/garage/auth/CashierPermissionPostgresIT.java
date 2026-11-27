@@ -65,6 +65,8 @@ class CashierPermissionPostgresIT {
     @Autowired AccessTokenService tokenService;
     @Autowired MockMvc mvc;
     @Autowired EmployeeService employeeService;
+    @Autowired com.richcomes.garage.customer.repository.CustomerRepository customers;
+    @Autowired com.richcomes.garage.auth.service.CustomerContactSecurityService contactSecurity;
 
     @Test
     @Order(3)
@@ -294,6 +296,89 @@ class CashierPermissionPostgresIT {
             }
         }
     }
+
+    @Test
+    @Order(4)
+    void customerMailboxChangeRevokesOldJwtAndChallengesAtomically() throws Exception {
+        assertIsolatedPostgres();
+        var tx = new TransactionTemplate(transactions);
+        var owner = createOwnerFixture();
+        var actor = AccountPrincipal.from(accounts.findOneById(owner.id()).orElseThrow());
+        var fixture = tx.execute(status -> {
+            var customer = new com.richcomes.garage.customer.entity.Customer();
+            customer.setCustomerType(com.richcomes.garage.customer.enums.CustomerType.COMPANY);
+            customer.setName("Synthetic Contact Test");
+            customer.setAddress("Synthetic address");
+            customer.setMobile("0700000000");
+            customer.setCity("Synthetic city");
+            customer.setEmail("old@example.invalid");
+            customers.saveAndFlush(customer);
+            var account = UserAccount.customer(customer, uniqueUsername("contact"), "synthetic-placeholder",
+                    roles.findByCode("CUSTOMER").orElseThrow());
+            account.recordCustomerIdentityProof(owner.id(), "CASE-CONTACT", customer.getEmail(), java.time.Instant.now());
+            account.setCustomerInitialPassword("synthetic-customer-hash", java.time.Instant.now());
+            account.verifyRecoveryEmail(customer.getEmail());
+            account.enable();
+            accounts.saveAndFlush(account);
+            sql.update("""
+                    INSERT INTO garage.recovery_challenges
+                    (id,account_id,purpose,token_hash,email,credential_version,expires_at,consumed)
+                    VALUES (?,?,'RESET_PASSWORD',?,?,?,CURRENT_TIMESTAMP + INTERVAL '15 minutes',false)
+                    """, UUID.randomUUID(), account.getId(),
+                    UUID.randomUUID().toString().replace("-", "") + UUID.randomUUID().toString().replace("-", ""),
+                    customer.getEmail(), account.getCredentialVersion());
+            return new ContactFixture(customer.getId(), account.getId(), account.getCredentialVersion());
+        });
+        assertNotNull(fixture);
+        String bearer = "Bearer " + tokenService.issue(fixture.accountId(), fixture.version()).accessToken();
+        mvc.perform(get("/api/customer/me").header("Authorization", bearer)).andExpect(status().isOk());
+        tx.executeWithoutResult(status -> {
+            var customer = customers.lockById(fixture.customerId()).orElseThrow();
+            contactSecurity.invalidateBeforeEmailChange(customer, "new@example.invalid", actor);
+            customer.setEmail("new@example.invalid");
+            status.setRollbackOnly();
+        });
+        assertEquals(1, contactChallengeCount(fixture.accountId()));
+        assertEquals(0, contactAuditCount(fixture.accountId()));
+        mvc.perform(get("/api/customer/me").header("Authorization", bearer)).andExpect(status().isOk());
+
+        tx.executeWithoutResult(status -> {
+            var customer = customers.lockById(fixture.customerId()).orElseThrow();
+            contactSecurity.invalidateBeforeEmailChange(customer, "new@example.invalid", actor);
+            customer.setEmail("new@example.invalid");
+        });
+        assertEquals(0, contactChallengeCount(fixture.accountId()));
+        assertEquals(1, contactAuditCount(fixture.accountId()));
+        var account = accounts.findOneById(fixture.accountId()).orElseThrow();
+        assertFalse(account.isEnabled());
+        assertFalse(account.hasCustomerVerifiedIdentity());
+        assertFalse(account.hasCustomerChosenPassword());
+        assertNull(account.getRecoveryEmail());
+        assertEquals(fixture.version() + 1, account.getCredentialVersion());
+        mvc.perform(get("/api/customer/me").header("Authorization", bearer)).andExpect(status().isUnauthorized());
+
+        tx.executeWithoutResult(status -> {
+            var customer = customers.lockById(fixture.customerId()).orElseThrow();
+            contactSecurity.invalidateBeforeEmailChange(customer, "old@example.invalid", actor);
+            customer.setEmail("old@example.invalid");
+        });
+        mvc.perform(get("/api/customer/me").header("Authorization", bearer)).andExpect(status().isUnauthorized());
+        assertFalse(accounts.findOneById(fixture.accountId()).orElseThrow().hasCustomerVerifiedIdentity());
+    }
+
+    private int contactChallengeCount(Long accountId) {
+        return sql.queryForObject("SELECT count(*) FROM garage.recovery_challenges WHERE account_id=?",
+                Integer.class, accountId);
+    }
+
+    private int contactAuditCount(Long accountId) {
+        return sql.queryForObject("""
+                SELECT count(*) FROM garage.security_audit_events
+                WHERE target_id=? AND event_code='CUSTOMER_EMAIL_CHANGED_IDENTITY_REVOKED'
+                """, Integer.class, accountId);
+    }
+
+    private record ContactFixture(Long customerId, Long accountId, long version) {}
 
     private OwnerFixture createOwnerFixture() {
         return new TransactionTemplate(transactions).execute(status -> {

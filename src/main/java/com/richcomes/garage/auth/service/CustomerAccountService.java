@@ -63,7 +63,7 @@ public class CustomerAccountService {
         } catch (IllegalArgumentException exception) {
             throw failure(INVALID_REQUEST, "Invalid username format");
         }
-        var customer = customers.findById(request.customerId())
+        var customer = customers.lockById(request.customerId())
                 .orElseThrow(() -> failure(CUSTOMER_NOT_FOUND, "Customer record not found"));
         if (customer.getStatus() != CustomerStatus.ACTIVE) {
             throw failure(CUSTOMER_INACTIVE, "Customer must be active before enrollment");
@@ -135,7 +135,7 @@ public class CustomerAccountService {
         if (accountId == null || accountId <= 0) {
             throw failure(INVALID_REQUEST, "Valid account ID required");
         }
-        var account = accounts.findOneById(accountId)
+        var account = accounts.lockById(accountId)
                 .orElseThrow(() -> failure(CUSTOMER_ACCOUNT_NOT_FOUND, "Customer login account not found"));
         if (!account.isCustomer() || account.getCustomer() == null
                 || account.getEmployee() != null || account.getRoles().size() != 1
