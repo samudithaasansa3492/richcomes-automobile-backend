@@ -40,6 +40,7 @@ http-client.private.env.json
 .env.*
 !.env.example
 !**/.env.example
+.idea/inspectionProfiles/
 
 # Database backups must NEVER be committed (they can contain customer data)
 *.dump
