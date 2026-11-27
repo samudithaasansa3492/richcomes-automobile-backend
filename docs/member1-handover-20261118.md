@@ -1,5 +1,7 @@
 # Member 1 — final backend handover (code/test scope, 24 Nov 2026)
 
+> **Historical V28 evidence.** For current V31 engineering/recovery status and outstanding release gates, see [Member 01 V31 handover](member01-handover-v31.md). Do not use this historical baseline for current shared database operations.
+
 **Current reference:** `main` after [PR #67](https://github.com/samudithaasansa3492/richcomes-automobile-backend/pull/67), merge `423fd8594b8d58612cc10403aacbd19019e8aa86`. The combined code/backup tooling passed exact-head CI before merge; [merged-main CI run 45331699285](https://github.com/samudithaasansa3492/richcomes-automobile-backend/actions/runs/45331699285) is separately tracked (first attempt stopped at the Maven distribution download before Java tests; failed job was rerun). **Engineering status:** authentication, employee management, role and account backend code delivered and independently tested in disposable Java 21/PostgreSQL. **Production deployment is NOT complete or certified.** Do not conflate a verified development backend with live Railway hosting.
 
 ## What this team member can hand over now
