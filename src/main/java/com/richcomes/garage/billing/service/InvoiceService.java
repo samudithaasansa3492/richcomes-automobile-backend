@@ -80,6 +80,14 @@ public class InvoiceService {
         JobBillingDetails job =
                 jobBillingAdapter.getBillingDetails(serviceJobId);
 
+        if (job.getJobStatus() == null
+                || !"COMPLETED".equalsIgnoreCase(job.getJobStatus())) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Invoice can only be created for a completed service job"
+            );
+        }
+
         BigDecimal subtotal =
                 calculationService.calculateSubtotal(job.getItems());
 

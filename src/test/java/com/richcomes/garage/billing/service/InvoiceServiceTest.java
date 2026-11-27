@@ -101,6 +101,7 @@ class InvoiceServiceTest {
         job.setServiceJobId(10L);
         job.setCustomerId(2L);
         job.setVehicleId(3L);
+        job.setJobStatus("COMPLETED");
         job.setItems(List.of(line));
 
         when(invoices.findFirstByServiceJobIdAndStatusNotOrderByIdDesc(
@@ -126,8 +127,10 @@ class InvoiceServiceTest {
 
         assertEquals(
                 0,
-                new BigDecimal("1500.00").compareTo(response.getSubtotal())
+                new BigDecimal("1500.00")
+                        .compareTo(response.getSubtotal())
         );
+
         assertEquals(
                 0,
                 new BigDecimal("1500.00")
@@ -136,6 +139,162 @@ class InvoiceServiceTest {
 
         verify(invoices).save(any(Invoice.class));
         verify(invoiceItems).saveAll(anyList());
+    }
+
+    @Test
+    void rejectsDraftCreationForPendingJob() {
+        JobBillingAdapter adapter = mock(JobBillingAdapter.class);
+        InvoiceRepository invoices = mock(InvoiceRepository.class);
+        InvoiceItemRepository invoiceItems =
+                mock(InvoiceItemRepository.class);
+
+        InvoiceService service = new InvoiceService(
+                adapter,
+                new InvoiceCalculationService(),
+                invoices,
+                invoiceItems
+        );
+
+        JobBillingDetails job = new JobBillingDetails();
+        job.setServiceJobId(10L);
+        job.setCustomerId(2L);
+        job.setVehicleId(3L);
+        job.setJobStatus("PENDING");
+        job.setItems(List.of());
+
+        when(invoices.findFirstByServiceJobIdAndStatusNotOrderByIdDesc(
+                10,
+                InvoiceStatus.CANCELLED
+        )).thenReturn(Optional.empty());
+
+        when(adapter.getBillingDetails(10L)).thenReturn(job);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.createDraft(10L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+
+        verify(invoices, never()).save(any(Invoice.class));
+        verify(invoiceItems, never()).saveAll(anyList());
+    }
+
+    @Test
+    void rejectsDraftCreationForInprogressJob() {
+        JobBillingAdapter adapter = mock(JobBillingAdapter.class);
+        InvoiceRepository invoices = mock(InvoiceRepository.class);
+        InvoiceItemRepository invoiceItems =
+                mock(InvoiceItemRepository.class);
+
+        InvoiceService service = new InvoiceService(
+                adapter,
+                new InvoiceCalculationService(),
+                invoices,
+                invoiceItems
+        );
+
+        JobBillingDetails job = new JobBillingDetails();
+        job.setServiceJobId(10L);
+        job.setCustomerId(2L);
+        job.setVehicleId(3L);
+        job.setJobStatus("IN_PROGRESS");
+        job.setItems(List.of());
+
+        when(invoices.findFirstByServiceJobIdAndStatusNotOrderByIdDesc(
+                10,
+                InvoiceStatus.CANCELLED
+        )).thenReturn(Optional.empty());
+
+        when(adapter.getBillingDetails(10L)).thenReturn(job);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.createDraft(10L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+
+        verify(invoices, never()).save(any(Invoice.class));
+        verify(invoiceItems, never()).saveAll(anyList());
+    }
+
+    @Test
+    void rejectsDraftCreationForCancelledJob() {
+        JobBillingAdapter adapter = mock(JobBillingAdapter.class);
+        InvoiceRepository invoices = mock(InvoiceRepository.class);
+        InvoiceItemRepository invoiceItems =
+                mock(InvoiceItemRepository.class);
+
+        InvoiceService service = new InvoiceService(
+                adapter,
+                new InvoiceCalculationService(),
+                invoices,
+                invoiceItems
+        );
+
+        JobBillingDetails job = new JobBillingDetails();
+        job.setServiceJobId(10L);
+        job.setCustomerId(2L);
+        job.setVehicleId(3L);
+        job.setJobStatus("CANCELLED");
+        job.setItems(List.of());
+
+        when(invoices.findFirstByServiceJobIdAndStatusNotOrderByIdDesc(
+                10,
+                InvoiceStatus.CANCELLED
+        )).thenReturn(Optional.empty());
+
+        when(adapter.getBillingDetails(10L)).thenReturn(job);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.createDraft(10L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+
+        verify(invoices, never()).save(any(Invoice.class));
+        verify(invoiceItems, never()).saveAll(anyList());
+    }
+
+    @Test
+    void rejectsDraftCreationForClosedJob() {
+        JobBillingAdapter adapter = mock(JobBillingAdapter.class);
+        InvoiceRepository invoices = mock(InvoiceRepository.class);
+        InvoiceItemRepository invoiceItems =
+                mock(InvoiceItemRepository.class);
+
+        InvoiceService service = new InvoiceService(
+                adapter,
+                new InvoiceCalculationService(),
+                invoices,
+                invoiceItems
+        );
+
+        JobBillingDetails job = new JobBillingDetails();
+        job.setServiceJobId(10L);
+        job.setCustomerId(2L);
+        job.setVehicleId(3L);
+        job.setJobStatus("CLOSED");
+        job.setItems(List.of());
+
+        when(invoices.findFirstByServiceJobIdAndStatusNotOrderByIdDesc(
+                10,
+                InvoiceStatus.CANCELLED
+        )).thenReturn(Optional.empty());
+
+        when(adapter.getBillingDetails(10L)).thenReturn(job);
+
+        ResponseStatusException exception = assertThrows(
+                ResponseStatusException.class,
+                () -> service.createDraft(10L)
+        );
+
+        assertEquals(HttpStatus.CONFLICT, exception.getStatusCode());
+
+        verify(invoices, never()).save(any(Invoice.class));
+        verify(invoiceItems, never()).saveAll(anyList());
     }
 
     @Test
