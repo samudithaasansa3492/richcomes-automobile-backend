@@ -68,7 +68,7 @@ class CustomerAccountServiceTest {
     }
 
     @Test void createsDisabledAccountForExistingActiveCustomer() {
-        when(customers.findById(7L)).thenReturn(Optional.of(customer));
+        when(customers.lockById(7L)).thenReturn(Optional.of(customer));
         when(roles.findByCode("CUSTOMER")).thenReturn(Optional.of(new Role("CUSTOMER", "Customer")));
         when(passwords.encode(anyString())).thenReturn("encoded-password");
         when(accounts.saveAndFlush(any(UserAccount.class))).thenAnswer(inv -> inv.getArgument(0));
@@ -85,7 +85,7 @@ class CustomerAccountServiceTest {
     }
 
     @Test void rejectsExistingCustomerIdentity() {
-        when(customers.findById(7L)).thenReturn(Optional.of(customer));
+        when(customers.lockById(7L)).thenReturn(Optional.of(customer));
         when(accounts.existsByCustomer_Id(7L)).thenReturn(true);
         var ex = assertThrows(AccountOperationException.class, () -> service.register(request(), staff));
         assertEquals(AccountOperationException.Code.CUSTOMER_ALREADY_HAS_ACCOUNT, ex.getCode());
@@ -94,7 +94,7 @@ class CustomerAccountServiceTest {
 
     @Test void cannotRegisterSuspendedCustomer() {
         customer.setStatus(CustomerStatus.SUSPENDED);
-        when(customers.findById(7L)).thenReturn(Optional.of(customer));
+        when(customers.lockById(7L)).thenReturn(Optional.of(customer));
         assertEquals(AccountOperationException.Code.CUSTOMER_INACTIVE,
                 assertThrows(AccountOperationException.class,
                         () -> service.register(request(), staff)).getCode());
@@ -107,7 +107,7 @@ class CustomerAccountServiceTest {
         account.recordCustomerIdentityProof(51L, "CASE-00123", customer.getEmail(),
                 java.time.Instant.now());
         account.setCustomerInitialPassword("encoded-customer-secret", java.time.Instant.now());
-        when(accounts.findOneById(4L)).thenReturn(Optional.of(account));
+        when(accounts.lockById(4L)).thenReturn(Optional.of(account));
         when(accounts.saveAndFlush(account)).thenReturn(account);
         assertFalse(account.isEnabled());
         assertTrue(service.activate(4L, staff).enabled());
@@ -137,7 +137,7 @@ class CustomerAccountServiceTest {
     @Test void customerActivationDeniedUntilProofAndCustomerChosenPassword() {
         var account = UserAccount.customer(customer, "customer.one", "random-placeholder-hash",
                 new Role("CUSTOMER", "Customer"));
-        when(accounts.findOneById(4L)).thenReturn(Optional.of(account));
+        when(accounts.lockById(4L)).thenReturn(Optional.of(account));
         assertEquals(AccountOperationException.Code.CUSTOMER_VERIFICATION_REQUIRED,
                 assertThrows(AccountOperationException.class,
                         () -> service.activate(4L, staff)).getCode());

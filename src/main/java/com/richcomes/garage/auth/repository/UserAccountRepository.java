@@ -22,6 +22,10 @@ public interface UserAccountRepository extends JpaRepository<UserAccount, Long> 
     @Query("select a from UserAccount a where a.id = :id")
     Optional<UserAccount> lockById(@org.springframework.data.repository.query.Param("id") Long id);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("select a from UserAccount a where a.customer.id = :customerId")
+    Optional<UserAccount> lockByCustomerId(@org.springframework.data.repository.query.Param("customerId") Long customerId);
+
     org.springframework.data.domain.Page<UserAccount> findByIdentityKind(
             String identityKind, org.springframework.data.domain.Pageable pageable);
 

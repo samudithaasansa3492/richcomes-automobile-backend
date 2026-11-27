@@ -141,6 +141,24 @@ public class UserAccount {
         resetPasswordHash(encodedHash);
         customerPasswordSetAt = at;
     }
+    /** A changed identity mailbox requires a new independent OWNER proof and
+     * customer-chosen password. The caller holds the account row lock and
+     * atomically removes outstanding challenges and records the audit event. */
+    public void invalidateCustomerIdentityForEmailChange(String unusableHash) {
+        if (!isCustomer() || customer == null) {
+            throw new IllegalStateException("Only a customer identity can be invalidated");
+        }
+        resetPasswordHash(unusableHash);
+        disable();
+        customerVerifiedAt = null;
+        customerVerifiedBy = null;
+        customerVerificationRef = null;
+        customerVerifiedEmail = null;
+        customerPasswordSetAt = null;
+        recoveryEmail = null;
+        // Retain delivery throttle even when proof changes.
+    }
+
     public void recordRecoveryDelivery(Instant time) { recoveryLastSentAt = time; }
     public void verifyRecoveryEmail(String email) { recoveryEmail = Objects.requireNonNull(email); }
     public void revokeTokens() { credentialVersion = Math.incrementExact(credentialVersion); }
